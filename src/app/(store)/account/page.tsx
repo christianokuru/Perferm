@@ -1,9 +1,20 @@
+import { Suspense } from "react";
+
 import { AccountOverview } from "@/components/account/account-pages";
+import { PageSkeleton } from "@/components/providers/hydration-gate";
 import { requireViewer } from "@/lib/auth/session";
 import { listMyOrders } from "@/lib/orders/repository";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function AccountPage() {
+export default function AccountPage() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <AccountContent />
+    </Suspense>
+  );
+}
+
+async function AccountContent() {
   const viewer = await requireViewer("/account");
   const supabase = await createClient();
   const [orders, wishlist, addresses] = await Promise.all([

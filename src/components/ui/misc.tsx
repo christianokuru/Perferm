@@ -50,7 +50,7 @@ export function Breadcrumbs({ items, className }: { items: Crumb[]; className?: 
     <nav aria-label="Breadcrumb" className={cn("text-caption text-smoke", className)}>
       <ol className="flex flex-wrap items-center gap-1">
         {items.map((item, i) => (
-          <li key={item.label} className="flex items-center gap-1">
+          <li key={`${i}-${item.label}`} className="flex items-center gap-1">
             {item.href && i < items.length - 1 ? (
               <Link href={item.href} className="hover:text-ink">
                 {item.label}

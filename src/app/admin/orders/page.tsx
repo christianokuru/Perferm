@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { OrdersAdmin } from "@/components/admin/orders-admin";
+import { PageSkeleton } from "@/components/providers/hydration-gate";
 import { parsePage, parseSearch } from "@/lib/admin/queries";
 import { requireAdmin } from "@/lib/auth/session";
 import { orderStatusLabels } from "@/lib/catalog/labels";
@@ -9,7 +11,15 @@ import type { OrderStatus } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Orders" };
 
-export default async function AdminOrdersPage({ searchParams }: PageProps<"/admin/orders">) {
+export default function AdminOrdersPage(props: PageProps<"/admin/orders">) {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <OrdersContent {...props} />
+    </Suspense>
+  );
+}
+
+async function OrdersContent({ searchParams }: PageProps<"/admin/orders">) {
   await requireAdmin("/admin/orders");
   const params = await searchParams;
   const raw = typeof params.status === "string" ? params.status : "";

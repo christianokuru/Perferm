@@ -27,7 +27,7 @@ const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:n
 
 const panelBySide: Record<Side, string> = {
   right: "inset-y-0 right-0 w-full max-w-[440px] animate-sheet-in rounded-l-[var(--radius-card)]",
-  left: "inset-y-0 left-0 w-full max-w-[440px] animate-[sheet-in_0.45s_var(--ease-silk)_reverse_both] rounded-r-[var(--radius-card)]",
+  left: "inset-y-0 left-0 w-full max-w-[440px] animate-sheet-in-left rounded-r-[var(--radius-card)]",
   bottom: "inset-x-0 bottom-0 max-h-[88dvh] animate-sheet-up rounded-t-[20px]",
   center:
     "top-1/2 left-1/2 w-[calc(100%-2rem)] max-w-[480px] -translate-x-1/2 -translate-y-1/2 animate-fade-up rounded-[var(--radius-card)]",

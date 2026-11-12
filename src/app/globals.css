@@ -60,6 +60,7 @@
   --animate-fade-up: fade-up 0.8s var(--ease-silk) both;
   --animate-fade-in: fade-in 0.3s ease-out both;
   --animate-sheet-in: sheet-in 0.45s var(--ease-silk) both;
+  --animate-sheet-in-left: sheet-in-left 0.45s var(--ease-silk) both;
   --animate-sheet-up: sheet-up 0.45s var(--ease-silk) both;
 
   @keyframes marquee {
@@ -76,6 +77,10 @@
   }
   @keyframes sheet-in {
     from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+  @keyframes sheet-in-left {
+    from { transform: translateX(-100%); }
     to { transform: translateX(0); }
   }
   @keyframes sheet-up {

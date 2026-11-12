@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowRightIcon, HeartIcon, PinIcon, ReceiptIcon } from "@/components/icons";
 import { OrderDetails, OrderHistory, OrderStatusBadge, OrderTimeline } from "@/components/orders/order-details";
 import { ButtonLink } from "@/components/ui/button";
-import { Breadcrumbs, EmptyState } from "@/components/ui/misc";
+import { EmptyState } from "@/components/ui/misc";
 import { Accent } from "@/components/ui/typography";
 import { formatNaira } from "@/lib/money";
 import type { Order } from "@/lib/types";
@@ -154,8 +154,7 @@ export function OrderDetailView({ order }: { order: Order | null }) {
 
   return (
     <>
-      <Breadcrumbs items={[{ label: "Orders", href: "/account/orders" }, { label: order.reference }]} />
-      <div className="mt-6 mb-8 flex flex-wrap items-center gap-3">
+      <div className="mb-8 flex flex-wrap items-center gap-3">
         <h1 className="font-mono text-[1.75rem] tracking-tight text-ink">{order.reference}</h1>
         <OrderStatusBadge status={order.status} />
       </div>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { AccountNav } from "@/components/account/account-nav";
+import { AreaBreadcrumbs } from "@/components/layout/area-breadcrumbs";
 import { PageSkeleton } from "@/components/providers/hydration-gate";
 
 export const metadata: Metadata = {
@@ -23,6 +24,9 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
           </Suspense>
         </aside>
         <div className="min-w-0">
+          <Suspense>
+            <AreaBreadcrumbs area="account" />
+          </Suspense>
           <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
         </div>
       </div>

@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { OrderDetails, OrderHistory, OrderStatusBadge, OrderTimeline } from "@/components/orders/order-details";
 import { ButtonLink } from "@/components/ui/button";
-import { Badge, Breadcrumbs, EmptyState } from "@/components/ui/misc";
+import { Badge, EmptyState } from "@/components/ui/misc";
 import { formatNaira } from "@/lib/money";
 import { ADMIN_PAGE_SIZE, type AdminOrderListItem } from "@/lib/orders/repository";
 import type { Order, OrderStatus } from "@/lib/types";
@@ -125,7 +125,6 @@ export function AdminOrderView({ order }: { order: Order | null }) {
 
   return (
     <>
-      <Breadcrumbs items={[{ label: "Orders", href: "/admin/orders" }, { label: order.reference }]} className="mb-6" />
       <AdminHeading
         title={order.reference}
         description={`${order.customer.name} · ${order.customer.email}`}

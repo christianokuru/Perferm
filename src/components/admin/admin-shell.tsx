@@ -17,6 +17,7 @@ import {
   TruckIcon,
   UsersIcon,
 } from "@/components/icons";
+import { AreaBreadcrumbs } from "@/components/layout/area-breadcrumbs";
 import { Logo } from "@/components/layout/logo";
 import { IconButton } from "@/components/ui/icon-button";
 import { Sheet } from "@/components/ui/sheet";
@@ -94,6 +95,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
             </Link>
           </header>
           <main id="main" className="px-4 py-8 lg:px-8 lg:py-10">
+            <Suspense>
+              <AreaBreadcrumbs area="admin" />
+            </Suspense>
             {children}
           </main>
         </div>
