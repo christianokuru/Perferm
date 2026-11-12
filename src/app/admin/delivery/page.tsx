@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { DeliveryAdmin } from "@/components/admin/store-admin";
 import { PageSkeleton } from "@/components/providers/hydration-gate";
 import { listZonesForAdmin } from "@/lib/admin/queries";
-import { requireAdmin } from "@/lib/auth/session";
+import { withAdmin } from "@/lib/auth/session";
 
 export const metadata: Metadata = { title: "Delivery" };
 
@@ -17,6 +17,6 @@ export default function Page() {
 }
 
 async function DeliveryContent() {
-  await requireAdmin("/admin/delivery");
-  return <DeliveryAdmin zones={await listZonesForAdmin()} />;
+  const [, zones] = await withAdmin("/admin/delivery", listZonesForAdmin);
+  return <DeliveryAdmin zones={zones} />;
 }

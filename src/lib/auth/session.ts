@@ -78,6 +78,33 @@ export async function requireAdmin(returnTo = "/admin"): Promise<Viewer> {
   return viewer;
 }
 
+/**
+ * Starts a page's reads at the same time as the access check instead of after
+ * it, saving a database round trip. The reads run as the visitor's own session,
+ * so Postgres RLS / SECURITY DEFINER checks keep them empty for anyone not
+ * allowed. Their result is only returned once the check has passed.
+ */
+async function withAccess<T>(check: () => Promise<Viewer>, load: () => Promise<T>): Promise<[Viewer, T]> {
+  // Mark the render as per-request before any read runs (the clients read the clock).
+  await connection();
+  const access = check();
+  const pending = load();
+  // The check decides the outcome; an early failure of the reads is re-thrown below.
+  pending.catch(() => {});
+  const viewer = await access;
+  return [viewer, await pending];
+}
+
+/** requireAdmin + the page's data, loaded in parallel. */
+export function withAdmin<T>(returnTo: string, load: () => Promise<T>) {
+  return withAccess(() => requireAdmin(returnTo), load);
+}
+
+/** requireViewer + the page's data, loaded in parallel. */
+export function withViewer<T>(returnTo: string, load: () => Promise<T>) {
+  return withAccess(() => requireViewer(returnTo), load);
+}
+
 export class AuthError extends Error {
   constructor(public readonly code: "unauthenticated" | "forbidden") {
     super(code);

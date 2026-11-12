@@ -10,17 +10,22 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/** Blocks rendering of any admin page for non-admins (each page also re-checks). */
-async function AdminGate({ children }: { children: React.ReactNode }) {
+/**
+ * Blocks any admin page for non-admins (each page also re-checks). It sits
+ * beside the page rather than around it, so the page's reads start at the same
+ * time; the shared Suspense boundary reveals nothing until the check passes.
+ */
+async function AdminGate() {
   await requireAdmin();
-  return <>{children}</>;
+  return null;
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <AdminShell>
       <Suspense fallback={<PageSkeleton />}>
-        <AdminGate>{children}</AdminGate>
+        <AdminGate />
+        {children}
       </Suspense>
     </AdminShell>
   );

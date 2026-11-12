@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
 
+import { getSessionUser } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Tables } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
@@ -75,19 +76,27 @@ export function hashAccessKey(key: string): string {
 
 const REFERENCE_PATTERN = /^PF-[A-Z0-9]{8}$/;
 
-/** Customer view: RLS guarantees only the signed-in owner's order is returned. */
+/**
+ * Customer views. Scoped to the signed-in user explicitly: RLS also lets admins
+ * read every order, and an admin's own account pages must still show only theirs.
+ */
 export async function getMyOrder(reference: string): Promise<Order | null> {
   if (!REFERENCE_PATTERN.test(reference)) return null;
+  const user = await getSessionUser();
+  if (!user) return null;
   const supabase = await createClient();
-  const { data } = await supabase.from("orders").select(ORDER_SELECT).eq("reference", reference).maybeSingle();
+  const { data } = await supabase.from("orders").select(ORDER_SELECT).eq("reference", reference).eq("user_id", user.id).maybeSingle();
   return data ? mapOrder(data as OrderRow) : null;
 }
 
 export async function listMyOrders(limit = 50): Promise<Order[]> {
+  const user = await getSessionUser();
+  if (!user) return [];
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("orders")
     .select(ORDER_SELECT)
+    .eq("user_id", user.id)
     .neq("status", "pending")
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -180,10 +189,10 @@ export async function listOrdersForAdmin(filters: AdminOrderFilters) {
 async function countOrdersByStatus(): Promise<Record<OrderStatus | "all", number>> {
   const supabase = await createClient();
   const statuses: OrderStatus[] = ["pending", "paid", "processing", "shipped", "ready_for_pickup", "delivered", "cancelled"];
-  const results = await Promise.all(
-    statuses.map((s) => supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", s)),
-  );
-  const counts = Object.fromEntries(statuses.map((s, i) => [s, results[i].count ?? 0])) as Record<OrderStatus, number>;
+  const { data, error } = await supabase.rpc("admin_order_counts");
+  if (error) throw new Error(`Failed to count orders: ${error.message}`);
+  const raw = (data ?? {}) as Partial<Record<OrderStatus, number>>;
+  const counts = Object.fromEntries(statuses.map((s) => [s, Number(raw[s] ?? 0)])) as Record<OrderStatus, number>;
   return { ...counts, all: Object.values(counts).reduce((a, b) => a + b, 0) };
 }
 

@@ -178,6 +178,7 @@ export type Database = {
         }[];
       };
       admin_dashboard: { Args: never; Returns: Json };
+      admin_order_counts: { Args: never; Returns: Json };
       admin_set_order_status: {
         Args: { p_note?: string; p_order_id: string; p_status: Enums_["order_status"] };
         Returns: OrderRow;

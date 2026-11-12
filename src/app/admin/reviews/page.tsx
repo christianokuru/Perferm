@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { ReviewsAdmin } from "@/components/admin/inbox-admin";
 import { PageSkeleton } from "@/components/providers/hydration-gate";
 import { listReviewsForAdmin, parsePage } from "@/lib/admin/queries";
-import { requireAdmin } from "@/lib/auth/session";
+import { withAdmin } from "@/lib/auth/session";
 
 export const metadata: Metadata = { title: "Reviews" };
 
@@ -19,10 +19,9 @@ export default function Page(props: PageProps<"/admin/reviews">) {
 }
 
 async function ReviewsContent({ searchParams }: PageProps<"/admin/reviews">) {
-  await requireAdmin("/admin/reviews");
   const params = await searchParams;
   const status = STATUSES.find((s) => s === params.status) ?? null;
   const page = parsePage(params.page);
-  const result = await listReviewsForAdmin(status, page);
+  const [, result] = await withAdmin("/admin/reviews", () => listReviewsForAdmin(status, page));
   return <ReviewsAdmin {...result} status={status} page={page} />;
 }
