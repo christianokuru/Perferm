@@ -116,7 +116,7 @@ export function ProductPurchase({ summary, variants }: { summary: ProductSummary
         <Button variant="accent" size="lg" className="min-w-0 flex-1" onClick={addToBag} disabled={soldOut} icon={<BagIcon size={18} />}>
           {soldOut ? "Sold out" : `Add to bag · ${formatNaira(variant.price * quantity)}`}
         </Button>
-        <WishlistButton product={summary} variant="outline" className="size-14" />
+        <WishlistButton product={summary} variant="outline" className="size-12 md:size-14" />
       </div>
 
       <button

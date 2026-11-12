@@ -99,6 +99,26 @@ html.lenis body {
   pointer-events: none;
 }
 
+/*
+ * Phone type scale (below the md breakpoint): body copy and controls step down
+ * one notch so dense screens breathe. Overrides the @theme tokens, so every
+ * `text-body` / `text-body-sm` / `text-subheading` use follows automatically.
+ */
+@media (max-width: 767px) {
+  :root {
+    --text-body: 0.9375rem; /* 15px (16px from md) */
+    --text-body-sm: 0.8125rem; /* 13px (14px from md) */
+    --text-subheading: 1.25rem; /* 20px (23px from md) */
+  }
+
+  /* iOS zooms into any field under 16px on focus — keep form controls at 16px. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;

@@ -23,10 +23,11 @@ const variants: Record<ButtonVariant, string> = {
   danger: "border border-danger/40 text-danger hover:bg-danger hover:text-white",
 };
 
+/** Phones get a slightly tighter pill; the full size returns from md. */
 const sizes: Record<ButtonSize, string> = {
-  sm: "h-9 px-4 text-body-sm",
-  md: "h-12 px-7 text-body-sm",
-  lg: "h-14 px-10 text-body",
+  sm: "h-8 px-3.5 text-body-sm md:h-9 md:px-4",
+  md: "h-11 px-6 text-body-sm md:h-12 md:px-7",
+  lg: "h-12 px-8 text-body-sm md:h-14 md:px-10 md:text-body",
 };
 
 export function buttonClasses({
