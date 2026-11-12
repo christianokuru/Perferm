@@ -1,5 +1,6 @@
 "use client";
 
+import { publicEnv } from "@/lib/config/public-env";
 import { siteConfig } from "@/lib/config/site";
 import { koboToNaira } from "@/lib/money";
 
@@ -17,15 +18,10 @@ const SCRIPTS = {
   flutterwave: "https://checkout.flutterwave.com/v3.js",
 } as const;
 
-export const publicKeys = {
-  paystack: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? "",
-  flutterwave: process.env.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY ?? "",
+const publicKeys = {
+  paystack: publicEnv.paystackPublicKey,
+  flutterwave: publicEnv.flutterwavePublicKey,
 };
-
-export function isLive(provider: keyof typeof publicKeys): boolean {
-  const key = publicKeys[provider];
-  return provider === "paystack" ? /^pk_(test|live)_/.test(key) : /^FLWPUBK(_TEST)?-/.test(key);
-}
 
 const loading = new Map<string, Promise<void>>();
 

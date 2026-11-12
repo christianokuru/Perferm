@@ -4,15 +4,12 @@ import { BagIcon, GiftIcon, LockIcon, TruckIcon } from "@/components/icons";
 import { HydrationGate } from "@/components/providers/hydration-gate";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/misc";
-import { deliveryZones } from "@/lib/data/delivery-zones";
 import { formatNaira } from "@/lib/money";
 import { selectItemCount, selectSubtotal, useCartStore } from "@/stores/cart-store";
 
 import { CartLineItem } from "./cart-line-item";
 
-const lowestFee = Math.min(...deliveryZones.map((z) => z.fee));
-
-function CartContent() {
+function CartContent({ lowestFee }: { lowestFee: number }) {
   const lines = useCartStore((s) => s.lines);
   const count = useCartStore(selectItemCount);
   const subtotal = useCartStore(selectSubtotal);
@@ -76,10 +73,10 @@ function CartContent() {
   );
 }
 
-export function CartView() {
+export function CartView({ lowestFee }: { lowestFee: number }) {
   return (
     <HydrationGate stores={["cart"]}>
-      <CartContent />
+      <CartContent lowestFee={lowestFee} />
     </HydrationGate>
   );
 }

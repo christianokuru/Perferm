@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { nigerianStates } from "@/lib/data/delivery-zones";
+import { nigerianStates } from "@/lib/data/nigerian-states";
 
 /** Shared field primitives. Every user input passes through one of these. */
 
@@ -18,12 +18,27 @@ export const emailField = z
   .max(254, "Email is too long")
   .pipe(z.email("Please enter a valid email address"));
 
-/** Nigerian mobile numbers: 080…, +23480…, 23480… (spaces and dashes allowed). */
+/** Canonical E.164 form (+2348012345678) for any accepted Nigerian mobile format. */
+export function toE164(phone: string): string {
+  const digits = phone.replace(/[^\d+]/g, "");
+  if (digits.startsWith("+234")) return digits;
+  if (digits.startsWith("234")) return `+${digits}`;
+  return `+234${digits.slice(1)}`;
+}
+
+/** Display form: +2348012345678 → 0801 234 5678. */
+export function formatPhone(phone: string): string {
+  const match = /^\+234(\d{3})(\d{3})(\d{4})$/.exec(phone);
+  return match ? `0${match[1]} ${match[2]} ${match[3]}` : phone;
+}
+
+/** Nigerian mobile numbers: 080…, +23480…, 23480… (spaces and dashes allowed). Output is E.164. */
 export const phoneField = z
   .string()
   .trim()
   .transform((value) => value.replace(/[\s()-]/g, ""))
-  .pipe(z.string().regex(/^(\+?234|0)[789][01]\d{8}$/, "Enter a valid Nigerian phone number, e.g. 0801 234 5678"));
+  .pipe(z.string().regex(/^(\+?234|0)[789][01]\d{8}$/, "Enter a valid Nigerian phone number, e.g. 0801 234 5678"))
+  .transform(toE164);
 
 export const passwordField = z
   .string()
@@ -35,7 +50,7 @@ export const passwordField = z
 
 export const stateField = z
   .string()
-  .refine((value) => nigerianStates.includes(value), "Please choose a state");
+  .refine((value) => (nigerianStates as readonly string[]).includes(value), "Please choose a state");
 
 export const shortText = (label: string, max = 120) =>
   z.string().trim().min(2, `Please enter ${label}`).max(max, `${label[0].toUpperCase()}${label.slice(1)} is too long`);

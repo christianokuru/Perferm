@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const isDev = process.env.NODE_ENV !== "production";
 
+/** The Supabase project (auth, data and Storage). */
+const SUPABASE_ORIGIN = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "");
+const SUPABASE_HOST = SUPABASE_ORIGIN ? new URL(SUPABASE_ORIGIN).hostname : "";
+
 /**
  * Hosts the browser may talk to. Kept in one place so the CSP, image
  * optimiser and payment adapters stay in sync.
@@ -24,9 +28,9 @@ const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} ${PAYMENT_SCRIPT_HOSTS.join(" ")}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://images.pexels.com",
+  `img-src 'self' data: blob: https://images.pexels.com ${SUPABASE_ORIGIN}`,
   "font-src 'self' data:",
-  `connect-src 'self' ${PAYMENT_API_HOSTS.join(" ")}${isDev ? " ws: wss:" : ""}`,
+  `connect-src 'self' ${SUPABASE_ORIGIN} ${PAYMENT_API_HOSTS.join(" ")}${isDev ? " ws: wss:" : ""}`,
   `frame-src ${PAYMENT_FRAME_HOSTS.join(" ")}`,
   "worker-src 'self'",
   "manifest-src 'self'",
@@ -67,7 +71,10 @@ const nextConfig: NextConfig = {
   },
   images: {
     formats: ["image/avif", "image/webp"],
-    remotePatterns: [{ protocol: "https", hostname: "images.pexels.com", pathname: "/photos/**" }],
+    remotePatterns: [
+      { protocol: "https", hostname: "images.pexels.com", pathname: "/photos/**" },
+      ...(SUPABASE_HOST ? [{ protocol: "https" as const, hostname: SUPABASE_HOST, pathname: "/storage/v1/object/public/product-images/**" }] : []),
+    ],
     minimumCacheTTL: 60 * 60 * 24 * 30,
   },
   async headers() {
@@ -83,6 +90,10 @@ const nextConfig: NextConfig = {
       },
       { source: "/admin/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] },
       { source: "/account/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] },
+      { source: "/auth/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] },
+      // Private, per-visitor pages must never be stored by a shared cache.
+      { source: "/checkout/success", headers: [{ key: "Cache-Control", value: "private, no-store" }] },
+      { source: "/api/webhooks/:path*", headers: [{ key: "Cache-Control", value: "no-store" }] },
     ];
   },
 };

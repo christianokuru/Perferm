@@ -4,24 +4,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import { prepareCheckout, quoteBag } from "@/app/actions/checkout";
+import { quoteBag, startCheckout, verifyCheckout } from "@/app/actions/checkout";
 import { LockIcon, StoreIcon, TruckIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { ChoiceCard, Field, FormMessage, Input, Select, Textarea } from "@/components/ui/form";
 import { toast } from "@/components/ui/toast";
 import type { Quote } from "@/lib/checkout/pricing";
-import { siteConfig } from "@/lib/config/site";
-import { deliveryZones } from "@/lib/data/delivery-zones";
 import { formatNaira } from "@/lib/money";
-import { providerInfo } from "@/lib/payments/types";
-import type { FulfilmentMethod, Order, PaymentProvider } from "@/lib/types";
+import { providerInfo, type CheckoutConfig } from "@/lib/payments/types";
+import type { DeliveryZone, FulfilmentMethod, PaymentProvider } from "@/lib/types";
 import { focusFirstError } from "@/lib/focus";
-import { createReference } from "@/lib/utils";
 import { validate, type FieldErrors } from "@/lib/validation/fields";
 import { checkoutSchema } from "@/lib/validation/schemas";
-import type { User } from "@/stores/auth-store";
 import { useCartStore } from "@/stores/cart-store";
-import { useOrderStore } from "@/stores/order-store";
+import type { SessionUser } from "@/stores/session-store";
 
 import { OrderSummary } from "./order-summary";
 import { usePaymentGateway } from "./use-payment-gateway";
@@ -39,29 +35,46 @@ function StepHeading({ step, title }: { step: number; title: string }) {
  * One-page checkout. Every total shown and charged comes from the server
  * quote; the browser cart only supplies product IDs and quantities.
  */
-export function CheckoutForm({ user }: { user: User | null }) {
+export interface SavedAddress {
+  recipient: string;
+  phone: string;
+  state: string;
+  city: string;
+  address: string;
+}
+
+export function CheckoutForm({
+  user,
+  defaultAddress,
+  zones,
+  config,
+}: {
+  user: SessionUser | null;
+  defaultAddress: SavedAddress | null;
+  zones: DeliveryZone[];
+  config: CheckoutConfig;
+}) {
   const router = useRouter();
   const lines = useCartStore((s) => s.lines);
   const reconcile = useCartStore((s) => s.reconcile);
   const clearCart = useCartStore((s) => s.clear);
-  const addOrder = useOrderStore((s) => s.add);
   const { pay, dialog } = usePaymentGateway();
 
-  const defaultAddress = user?.addresses.find((a) => a.isDefault) ?? user?.addresses[0];
-
+  const availableGateways = config.gateways.filter((g) => g.available);
   const [contact, setContact] = useState({
     email: user?.email ?? "",
     name: user?.name ?? "",
     phone: user?.phone ?? defaultAddress?.phone ?? "",
   });
   const [method, setMethod] = useState<FulfilmentMethod>("delivery");
+  const zoneStates = new Set(zones.map((z) => z.state));
   const [delivery, setDelivery] = useState({
-    state: defaultAddress?.state ?? "",
+    state: defaultAddress && zoneStates.has(defaultAddress.state) ? defaultAddress.state : "",
     city: defaultAddress?.city ?? "",
     address: defaultAddress?.address ?? "",
     notes: "",
   });
-  const [provider, setProvider] = useState<PaymentProvider>("paystack");
+  const [provider, setProvider] = useState<PaymentProvider>(availableGateways[0]?.provider ?? "paystack");
   const [errors, setErrors] = useState<FieldErrors>({});
   const clearError = (key: string) =>
     setErrors((current) => {
@@ -110,7 +123,7 @@ export function CheckoutForm({ user }: { user: User | null }) {
     };
   }, [cartPayload, method, delivery.state, reconcile]);
 
-  const zone = deliveryZones.find((z) => z.state === delivery.state);
+  const zone = zones.find((z) => z.state === delivery.state);
 
   const buildPayload = () => ({
     ...contact,
@@ -134,26 +147,26 @@ export function CheckoutForm({ user }: { user: User | null }) {
     setSubmitting(true);
 
     try {
-      const prepared = await prepareCheckout(payload);
-      if (!prepared.ok) {
-        if (prepared.quote) {
-          setQuote(prepared.quote);
-          reconcile(prepared.quote.lines);
+      const started = await startCheckout(payload);
+      if (!started.ok) {
+        if (started.quote) {
+          setQuote(started.quote);
+          reconcile(started.quote.lines);
         }
-        setErrors(prepared.fieldErrors ?? {});
-        setFormError(prepared.error ?? "Please check the highlighted fields.");
+        setErrors(started.fieldErrors ?? {});
+        setFormError(started.error ?? "Please check the highlighted fields.");
         focusFirstError();
         return;
       }
 
-      const reference = createReference();
       const outcome = await pay({
-        provider,
-        reference,
-        amount: prepared.quote.totals.total,
-        email: prepared.customer.email,
-        name: prepared.customer.name,
-        phone: prepared.customer.phone,
+        provider: started.provider,
+        mode: started.mode,
+        reference: started.reference,
+        amount: started.amount,
+        email: started.customer.email,
+        name: started.customer.name,
+        phone: started.customer.phone,
       });
 
       if (outcome.status === "cancelled") {
@@ -165,28 +178,14 @@ export function CheckoutForm({ user }: { user: User | null }) {
         return;
       }
 
-      const order: Order = {
-        reference,
-        createdAt: new Date().toISOString(),
-        status: "paid",
-        customer: prepared.customer,
-        fulfilment:
-          prepared.fulfilment.method === "pickup"
-            ? { method: "pickup" }
-            : {
-                method: "delivery",
-                state: prepared.fulfilment.state,
-                city: prepared.fulfilment.city,
-                address: prepared.fulfilment.address,
-                notes: prepared.fulfilment.notes || undefined,
-              },
-        payment: { provider, mode: outcome.mode, transactionId: outcome.transactionId },
-        lines: prepared.quote.lines,
-        totals: prepared.quote.totals,
-      };
-      addOrder(order);
+      // The popup's word is never trusted: the server verifies with the gateway.
+      const verified = await verifyCheckout({ reference: started.reference, accessKey: started.accessKey });
+      if (!verified.ok) {
+        setFormError(verified.error);
+        return;
+      }
       clearCart();
-      router.push(`/checkout/success?ref=${encodeURIComponent(reference)}`);
+      router.push(`/checkout/success?ref=${encodeURIComponent(started.reference)}&key=${encodeURIComponent(started.accessKey)}`);
     } catch {
       setFormError("Something went wrong on our side. You have not been charged — please try again.");
     } finally {
@@ -196,7 +195,8 @@ export function CheckoutForm({ user }: { user: User | null }) {
 
   const total = quote?.totals.total ?? 0;
   const stateChosen = Boolean(delivery.state);
-  const canPay = Boolean(quote?.lines.length) && (method === "pickup" || stateChosen);
+  const canPay =
+    Boolean(quote?.lines.length) && availableGateways.some((g) => g.provider === provider) && (method === "pickup" || stateChosen);
 
   return (
     <form onSubmit={onSubmit} noValidate className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_24rem] lg:gap-14">
@@ -255,8 +255,9 @@ export function CheckoutForm({ user }: { user: User | null }) {
               onChange={() => setMethod("pickup")}
               icon={<StoreIcon />}
               title="Pick up at the boutique"
-              description={`${siteConfig.boutique.street}, ${siteConfig.boutique.area} · ${siteConfig.boutique.hours}`}
+              description={config.pickup.enabled ? `${config.pickup.address} · ${config.pickup.hours}` : "Currently unavailable"}
               aside="Free"
+              disabled={!config.pickup.enabled}
             />
           </div>
 
@@ -266,9 +267,7 @@ export function CheckoutForm({ user }: { user: User | null }) {
                 {(p) => (
                   <Select {...p} autoComplete="address-level1" value={delivery.state} onChange={(e) => updateDelivery("state", e.target.value)}>
                     <option value="">Choose your state</option>
-                    {[...deliveryZones]
-                      .sort((a, b) => a.state.localeCompare(b.state))
-                      .map((z) => (
+                    {zones.map((z) => (
                         <option key={z.state} value={z.state}>
                           {z.state} — {formatNaira(z.fee)}
                         </option>
@@ -299,17 +298,22 @@ export function CheckoutForm({ user }: { user: User | null }) {
             <StepHeading step={3} title="Payment" />
           </div>
           <div role="radiogroup" aria-labelledby="payment-step" className="grid gap-3">
-            {(Object.keys(providerInfo) as PaymentProvider[]).map((p) => (
+            {config.gateways.map(({ provider: p, available, mode }) => (
               <ChoiceCard
                 key={p}
                 name="provider"
                 value={p}
                 checked={provider === p}
                 onChange={() => setProvider(p)}
+                disabled={!available}
                 title={`Pay with ${providerInfo[p].name}`}
-                description={providerInfo[p].methods}
+                description={available ? providerInfo[p].methods : "Currently unavailable"}
+                aside={available && mode === "demo" ? "Test mode" : null}
               />
             ))}
+            {!availableGateways.length ? (
+              <FormMessage>Online payment is temporarily unavailable. Please contact our concierge to complete your order.</FormMessage>
+            ) : null}
           </div>
           {errors.provider ? <p className="text-caption text-danger">{errors.provider}</p> : null}
           <p className="flex items-center gap-2 text-caption text-smoke">

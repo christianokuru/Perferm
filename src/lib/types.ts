@@ -10,6 +10,8 @@ export type ScentFamily = "woody" | "oriental" | "floral" | "fresh" | "gourmand"
 export interface ProductImage {
   src: string;
   alt: string;
+  /** Set for images uploaded to Supabase Storage (lets admins delete the file). */
+  storagePath?: string;
 }
 
 export interface ProductVariant {
@@ -34,6 +36,7 @@ export interface Review {
   title: string;
   body: string;
   date: string;
+  verified?: boolean;
 }
 
 export interface Product {
@@ -57,6 +60,7 @@ export interface Product {
   isNew?: boolean;
   isBestseller?: boolean;
   createdAt: string;
+  archived?: boolean;
 }
 
 export interface Collection {
@@ -89,8 +93,9 @@ export type OrderStatus =
   | "cancelled";
 
 export interface OrderLine {
-  productId: string;
-  variantId: string;
+  productId: string | null;
+  variantId: string | null;
+  slug?: string;
   name: string;
   house: string;
   variantLabel: string;
@@ -105,17 +110,30 @@ export interface OrderTotals {
   total: Kobo;
 }
 
+export interface OrderEvent {
+  kind: "created" | "status" | "payment" | "note" | "stock";
+  status: OrderStatus | null;
+  message: string | null;
+  internal: boolean;
+  createdAt: string;
+}
+
 export interface Order {
+  id: string;
   reference: string;
   createdAt: string;
   status: OrderStatus;
   customer: { name: string; email: string; phone: string };
   fulfilment:
-    | { method: "pickup" }
+    | { method: "pickup"; location?: string }
     | { method: "delivery"; state: string; city: string; address: string; notes?: string };
-  payment: { provider: PaymentProvider; mode: "live" | "demo"; transactionId?: string };
+  payment: { provider: PaymentProvider; mode: "live" | "demo"; transactionId?: string; paidAt?: string };
   lines: OrderLine[];
   totals: OrderTotals;
+  cancelReason?: string;
+  stockIssue?: boolean;
+  userId?: string | null;
+  events: OrderEvent[];
 }
 
 export interface Crumb {

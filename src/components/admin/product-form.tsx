@@ -1,22 +1,20 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 
+import { saveProduct } from "@/app/actions/admin";
 import { CloseIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Checkbox, Field, FormMessage, Input, Select, Textarea } from "@/components/ui/form";
-import { EmptyState } from "@/components/ui/misc";
 import { toast } from "@/components/ui/toast";
 import { concentrationLabels, familyLabels, genderLabels } from "@/lib/catalog/labels";
-import { collections } from "@/lib/data/collections";
-import { koboToNaira, naira } from "@/lib/money";
-import type { Concentration, Gender, Product, ScentFamily } from "@/lib/types";
+import { koboToNaira } from "@/lib/money";
+import { createClient } from "@/lib/supabase/client";
+import type { Collection, Concentration, Gender, Product, ScentFamily } from "@/lib/types";
 import { focusFirstError } from "@/lib/focus";
-import { slugify } from "@/lib/utils";
 import { validate, type FieldErrors } from "@/lib/validation/fields";
 import { imageSourceField, productFormSchema } from "@/lib/validation/admin";
-import { useAdminStore } from "@/stores/admin-store";
 
 import { AdminCard, AdminHeading } from "./admin-shell";
 
@@ -42,13 +40,14 @@ interface Draft {
   base: string;
   longevity: string;
   sillage: string;
-  images: string[];
+  images: Array<{ src: string; storagePath?: string }>;
   variants: VariantDraft[];
   isNew: boolean;
   isBestseller: boolean;
 }
 
-const MAX_UPLOAD_BYTES = 1_500_000;
+const MAX_UPLOAD_BYTES = 5_000_000;
+const UPLOAD_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/avif": "avif" };
 
 function toDraft(product?: Product): Draft {
   if (!product) {
@@ -62,7 +61,7 @@ function toDraft(product?: Product): Draft {
     name: product.name, house: product.house, tagline: product.tagline, description: product.description,
     gender: product.gender, concentration: product.concentration, families: product.families, collections: product.collections,
     top: product.notes.top.join(", "), heart: product.notes.heart.join(", "), base: product.notes.base.join(", "),
-    longevity: product.longevity, sillage: product.sillage, images: product.images.map((i) => i.src),
+    longevity: product.longevity, sillage: product.sillage, images: product.images.map((i) => ({ src: i.src, storagePath: i.storagePath })),
     variants: product.variants.map((v) => ({
       id: v.id, label: v.label, price: String(koboToNaira(v.price)),
       compareAtPrice: v.compareAtPrice ? String(koboToNaira(v.compareAtPrice)) : "", stock: String(v.stock),
@@ -80,9 +79,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-export function ProductForm({ product }: { product?: Product }) {
+export function ProductForm({ product, collections }: { product?: Product; collections: Pick<Collection, "slug" | "title">[] }) {
   const router = useRouter();
-  const upsert = useAdminStore((s) => s.upsertProduct);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => toDraft(product));
   const [imageUrl, setImageUrl] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -96,23 +96,31 @@ export function ProductForm({ product }: { product?: Product }) {
   const addImageUrl = () => {
     const parsed = imageSourceField.safeParse(imageUrl);
     if (!parsed.success) return setErrors((e) => ({ ...e, imageUrl: parsed.error.issues[0].message }));
-    set("images", [...draft.images, parsed.data]);
+    set("images", [...draft.images, { src: parsed.data }]);
     setImageUrl("");
     setErrors(({ imageUrl: _ignored, ...rest }) => rest);
   };
 
-  const onUpload = (event: ChangeEvent<HTMLInputElement>) => {
+  /** Uploads straight to Supabase Storage as the signed-in admin (Storage policies allow admins only). */
+  const onUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (!/^image\/(png|jpeg|webp|avif)$/.test(file.type)) return toast.error("Upload a PNG, JPEG, WebP or AVIF image.");
-    if (file.size > MAX_UPLOAD_BYTES) return toast.error("Images must be under 1.5 MB.");
-    const reader = new FileReader();
-    reader.onload = () => typeof reader.result === "string" && set("images", [...draft.images, reader.result]);
-    reader.readAsDataURL(file);
+    const ext = UPLOAD_TYPES[file.type];
+    if (!ext) return toast.error("Upload a PNG, JPEG, WebP or AVIF image.");
+    if (file.size > MAX_UPLOAD_BYTES) return toast.error("Images must be under 5 MB.");
+    if (draft.images.length >= 6) return toast.error("Up to 6 images per product.");
+    setUploading(true);
+    const path = `products/${crypto.randomUUID()}.${ext}`;
+    const supabase = createClient();
+    const { error } = await supabase.storage.from("product-images").upload(path, file, { contentType: file.type, cacheControl: "31536000", upsert: false });
+    setUploading(false);
+    if (error) return toast.error("Upload failed. Check your connection and try again.");
+    const { data } = supabase.storage.from("product-images").getPublicUrl(path);
+    setDraft((d) => ({ ...d, images: [...d.images, { src: data.publicUrl, storagePath: path }] }));
   };
 
-  const onSubmit = (event: FormEvent) => {
+  const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setFormError(null);
     const parsed = validate(productFormSchema, draft);
@@ -122,39 +130,18 @@ export function ProductForm({ product }: { product?: Product }) {
       focusFirstError();
       return;
     }
-    const d = parsed.data;
-    const slug = product?.slug ?? slugify(d.name);
-    const next: Product = {
-      id: product?.id ?? `p-${slug}-${crypto.randomUUID().slice(0, 6)}`,
-      slug,
-      name: d.name,
-      house: d.house,
-      tagline: d.tagline,
-      description: d.description,
-      gender: d.gender,
-      concentration: d.concentration,
-      families: d.families,
-      collections: d.collections,
-      notes: { top: d.top, heart: d.heart, base: d.base },
-      images: d.images.map((src, i) => ({ src, alt: `${d.name} — image ${i + 1}` })),
-      variants: d.variants.map((v) => ({
-        id: v.id ?? `${slug}-${slugify(v.label)}-${crypto.randomUUID().slice(0, 4)}`,
-        label: v.label,
-        price: naira(v.price),
-        compareAtPrice: typeof v.compareAtPrice === "number" && v.compareAtPrice > 0 ? naira(v.compareAtPrice) : undefined,
-        stock: v.stock,
-      })),
-      longevity: d.longevity,
-      sillage: d.sillage,
-      rating: product?.rating ?? 0,
-      reviewCount: product?.reviewCount ?? 0,
-      isNew: d.isNew,
-      isBestseller: d.isBestseller,
-      createdAt: product?.createdAt ?? new Date().toISOString().slice(0, 10),
-    };
-    upsert(next);
+    setErrors({});
+    setSaving(true);
+    const result = await saveProduct(draft, product?.id);
+    setSaving(false);
+    if (!result.ok) {
+      setErrors(result.fieldErrors ?? {});
+      setFormError(result.error ?? "Please fix the highlighted fields.");
+      return focusFirstError();
+    }
     toast.success(product ? "Product updated" : "Product created");
     router.push("/admin/products");
+    router.refresh();
   };
 
   const err = (key: string) => errors[key];
@@ -168,7 +155,9 @@ export function ProductForm({ product }: { product?: Product }) {
             <ButtonLink href="/admin/products" variant="ghost">
               Cancel
             </ButtonLink>
-            <Button type="submit">{product ? "Save changes" : "Create product"}</Button>
+            <Button type="submit" loading={saving} disabled={uploading}>
+              {product ? "Save changes" : "Create product"}
+            </Button>
           </>
         }
       />
@@ -232,22 +221,32 @@ export function ProductForm({ product }: { product?: Product }) {
           <Section title="Images">
             {draft.images.length ? (
               <ul className="grid grid-cols-3 gap-2">
-                {draft.images.map((src, i) => (
-                  <li key={`${i}-${src.slice(-24)}`} className="relative aspect-[4/5] overflow-hidden rounded-[10px] bg-pearl">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- previews include local data URLs */}
-                    <img src={src} alt="" className="size-full object-cover" />
+                {draft.images.map((image, i) => (
+                  <li key={`${i}-${image.src.slice(-24)}`} className="relative aspect-[4/5] overflow-hidden rounded-[10px] bg-pearl">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- admin preview of an uploaded image */}
+                    <img src={image.src} alt="" className="size-full object-cover" />
                     <button type="button" aria-label={`Remove image ${i + 1}`} onClick={() => set("images", draft.images.filter((_, j) => j !== i))} className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full bg-white/90 text-ink">
                       <CloseIcon size={12} />
                     </button>
-                    {i === 0 ? <span className="absolute bottom-1.5 left-1.5 rounded-full bg-ink px-2 py-0.5 text-[10px] text-white">Cover</span> : null}
+                    {i === 0 ? (
+                      <span className="absolute bottom-1.5 left-1.5 rounded-full bg-ink px-2 py-0.5 text-[10px] text-white">Cover</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => set("images", [image, ...draft.images.filter((_, j) => j !== i)])}
+                        className="absolute bottom-1.5 left-1.5 rounded-full bg-white/90 px-2 py-0.5 text-[10px] text-ink"
+                      >
+                        Make cover
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
             ) : null}
             {err("images") ? <p className="text-caption text-danger">{err("images")}</p> : null}
             <label className="flex h-12 cursor-pointer items-center justify-center rounded-full border border-dashed border-graphite/40 text-body-sm text-ink hover:border-ink">
-              Upload image
-              <input type="file" accept="image/png,image/jpeg,image/webp,image/avif" onChange={onUpload} className="sr-only" />
+              {uploading ? "Uploading…" : "Upload image"}
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/avif" onChange={onUpload} disabled={uploading} className="sr-only" />
             </label>
             <div className="flex gap-2">
               <Field label="Or paste an image link" error={err("imageUrl")} className="flex-1" srOnlyLabel>
@@ -281,13 +280,4 @@ export function ProductForm({ product }: { product?: Product }) {
       </div>
     </form>
   );
-}
-
-export function EditProductView() {
-  const { id } = useParams<{ id: string }>();
-  const product = useAdminStore((s) => s.products.find((p) => p.id === id));
-  if (!product) {
-    return <EmptyState title="Product not found" description="It may have been deleted." action={<ButtonLink href="/admin/products">Back to products</ButtonLink>} />;
-  }
-  return <ProductForm key={product.id} product={product} />;
 }

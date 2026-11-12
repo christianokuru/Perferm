@@ -6,7 +6,7 @@ import { Suspense } from "react";
 import { ProductGrid } from "@/components/product/product-rail";
 import { ShopView } from "@/components/shop/shop-view";
 import { JsonLd } from "@/components/seo/json-ld";
-import { Breadcrumbs } from "@/components/ui/misc";
+import { Breadcrumbs, Skeleton } from "@/components/ui/misc";
 import { Accent, Eyebrow } from "@/components/ui/typography";
 import { getCollectionBySlug, getCollections, getProductSummaries } from "@/lib/catalog/repository";
 import { absoluteUrl, breadcrumbJsonLd, pageMetadata } from "@/lib/seo";
@@ -41,7 +41,7 @@ function AccentTitle({ title, accent }: { title: string; accent: string }) {
   );
 }
 
-export default async function CollectionPage({ params }: PageProps<"/collections/[slug]">) {
+async function CollectionPageContent({ params }: Pick<PageProps<"/collections/[slug]">, "params">) {
   const { slug } = await params;
   const [collection, collections, allProducts] = await Promise.all([
     getCollectionBySlug(slug),
@@ -106,5 +106,31 @@ export default async function CollectionPage({ params }: PageProps<"/collections
         </Suspense>
       </div>
     </>
+  );
+}
+
+/** Instant shell for slugs that weren't prerendered (e.g. products added after a deploy). */
+function CollectionPageSkeleton() {
+  return (
+    <div className="container-page grid grid-cols-1 gap-8 pt-8 pb-24 md:grid-cols-[1.15fr_1fr]" aria-busy="true" aria-label="Loading">
+      <Skeleton className="aspect-[4/5]" />
+      <div className="space-y-4">
+        <Skeleton className="h-6 w-1/3" />
+        <Skeleton className="h-14 w-2/3" />
+        <Skeleton className="h-40" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The slug is read inside <Suspense>: prerendered slugs stay fully static, and
+ * new ones get an instant shell, render on first visit, then cache (ISR).
+ */
+export default function CollectionPage({ params }: PageProps<"/collections/[slug]">) {
+  return (
+    <Suspense fallback={<CollectionPageSkeleton />}>
+      <CollectionPageContent params={params} />
+    </Suspense>
   );
 }

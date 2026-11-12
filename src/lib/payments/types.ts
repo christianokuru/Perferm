@@ -2,6 +2,8 @@ import type { Kobo, PaymentProvider } from "@/lib/types";
 
 export interface PaymentRequest {
   provider: PaymentProvider;
+  /** Decided by the server when the order is created. */
+  mode: "live" | "demo";
   reference: string;
   amount: Kobo;
   email: string;
@@ -18,3 +20,15 @@ export const providerInfo: Record<PaymentProvider, { name: string; methods: stri
   paystack: { name: "Paystack", methods: "Card, bank transfer, USSD & Apple Pay" },
   flutterwave: { name: "Flutterwave", methods: "Card, bank transfer, USSD & mobile money" },
 };
+
+/** What the checkout may offer, computed on the server from settings + configured keys. */
+export interface GatewayOption {
+  provider: PaymentProvider;
+  available: boolean;
+  mode: "live" | "demo" | null;
+}
+
+export interface CheckoutConfig {
+  pickup: { enabled: boolean; address: string; hours: string };
+  gateways: GatewayOption[];
+}

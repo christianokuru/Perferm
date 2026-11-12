@@ -1,19 +1,13 @@
-"use client";
-
 import Link from "next/link";
-import { useParams } from "next/navigation";
 
 import { ArrowRightIcon, HeartIcon, PinIcon, ReceiptIcon } from "@/components/icons";
-import { OrderDetails, OrderStatusBadge, OrderTimeline } from "@/components/orders/order-details";
+import { OrderDetails, OrderHistory, OrderStatusBadge, OrderTimeline } from "@/components/orders/order-details";
 import { ButtonLink } from "@/components/ui/button";
 import { Breadcrumbs, EmptyState } from "@/components/ui/misc";
 import { Accent } from "@/components/ui/typography";
 import { formatNaira } from "@/lib/money";
 import type { Order } from "@/lib/types";
 import { formatDate, pluralize } from "@/lib/utils";
-import { useCurrentUser } from "@/stores/auth-store";
-import { useOrderStore } from "@/stores/order-store";
-import { useWishlistStore } from "@/stores/wishlist-store";
 
 export function AccountHeading({ title, accent, lead }: { title: string; accent?: string; lead?: React.ReactNode }) {
   return (
@@ -24,13 +18,6 @@ export function AccountHeading({ title, accent, lead }: { title: string; accent?
       {lead ? <p className="mt-3 text-body-sm text-smoke">{lead}</p> : null}
     </div>
   );
-}
-
-/** Orders belonging to the signed-in customer (matched by email). */
-function useMyOrders(): Order[] {
-  const user = useCurrentUser();
-  const orders = useOrderStore((s) => s.orders);
-  return user ? orders.filter((o) => o.customer.email === user.email) : [];
 }
 
 function OrderRow({ order }: { order: Order }) {
@@ -59,21 +46,34 @@ function OrderRow({ order }: { order: Order }) {
   );
 }
 
-export function AccountOverview() {
-  const user = useCurrentUser();
-  const orders = useMyOrders();
-  const saved = useWishlistStore((s) => s.items.length);
-  if (!user) return null;
-
+export function AccountOverview({
+  name,
+  memberSince,
+  orders,
+  orderCount,
+  wishlistCount,
+  addressCount,
+}: {
+  name: string;
+  memberSince: string;
+  orders: Order[];
+  orderCount: number;
+  wishlistCount: number;
+  addressCount: number;
+}) {
   const tiles = [
-    { href: "/account/orders", icon: ReceiptIcon, value: orders.length, label: "Orders" },
-    { href: "/wishlist", icon: HeartIcon, value: saved, label: "Saved" },
-    { href: "/account/addresses", icon: PinIcon, value: user.addresses.length, label: "Addresses" },
+    { href: "/account/orders", icon: ReceiptIcon, value: orderCount, label: "Orders" },
+    { href: "/wishlist", icon: HeartIcon, value: wishlistCount, label: "Saved" },
+    { href: "/account/addresses", icon: PinIcon, value: addressCount, label: "Addresses" },
   ];
 
   return (
     <>
-      <AccountHeading title="hello," accent={user.name.split(" ")[0]} lead={`Member since ${formatDate(user.createdAt, { month: "long", year: "numeric" })}`} />
+      <AccountHeading
+        title="hello,"
+        accent={name.split(" ")[0] || "there"}
+        lead={`Member since ${formatDate(memberSince, { month: "long", year: "numeric" })}`}
+      />
       <ul className="grid grid-cols-3 gap-2 md:gap-3">
         {tiles.map(({ href, icon: Icon, value, label }) => (
           <li key={label}>
@@ -99,7 +99,7 @@ export function AccountOverview() {
         </div>
         {orders.length ? (
           <ul className="space-y-2">
-            {orders.slice(0, 3).map((o) => (
+            {orders.map((o) => (
               <OrderRow key={o.reference} order={o} />
             ))}
           </ul>
@@ -116,8 +116,7 @@ export function AccountOverview() {
   );
 }
 
-export function OrdersList() {
-  const orders = useMyOrders();
+export function OrdersList({ orders }: { orders: Order[] }) {
   return (
     <>
       <AccountHeading title="your" accent="orders" lead="Track deliveries and revisit past purchases." />
@@ -139,10 +138,7 @@ export function OrdersList() {
   );
 }
 
-export function OrderDetailView() {
-  const { reference } = useParams<{ reference: string }>();
-  const order = useMyOrders().find((o) => o.reference === reference);
-
+export function OrderDetailView({ order }: { order: Order | null }) {
   if (!order) {
     return (
       <EmptyState
@@ -152,6 +148,9 @@ export function OrderDetailView() {
       />
     );
   }
+
+  const reviewable =
+    order.status === "delivered" ? order.lines.filter((l, i, all) => l.slug && all.findIndex((x) => x.slug === l.slug) === i) : [];
 
   return (
     <>
@@ -166,6 +165,27 @@ export function OrderDetailView() {
           <OrderDetails order={order} />
         </div>
       </div>
+
+      {reviewable.length ? (
+        <section className="mt-6 rounded-[var(--radius-card)] bg-pearl p-5 md:p-6" aria-labelledby="review-prompt">
+          <h2 id="review-prompt" className="text-body text-ink">
+            How was it?
+          </h2>
+          <p className="mt-1 text-body-sm text-smoke">Your review helps other clients choose — verified purchases are marked as such.</p>
+          <ul className="mt-4 flex flex-wrap gap-2">
+            {reviewable.map((line) => (
+              <li key={line.slug}>
+                <ButtonLink href={`/product/${line.slug}#write-review`} size="sm" variant="outline">
+                  Review {line.name}
+                </ButtonLink>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <OrderHistory order={order} className="mt-8" />
+
       <p className="mt-6 text-body-sm text-smoke">
         Need help with this order?{" "}
         <Link href="/contact" className="text-ink underline underline-offset-4">

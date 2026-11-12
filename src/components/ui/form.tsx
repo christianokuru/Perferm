@@ -142,6 +142,7 @@ export function ChoiceCard({
   description,
   icon,
   aside,
+  disabled,
 }: {
   name: string;
   value: string;
@@ -151,18 +152,21 @@ export function ChoiceCard({
   description?: ReactNode;
   icon?: ReactNode;
   aside?: ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <label
       className={cn(
         "flex cursor-pointer items-start gap-4 rounded-[var(--radius-card)] border p-4 transition-colors duration-200 md:p-5",
         checked ? "border-ink bg-pearl/60" : "border-mist hover:border-graphite/30",
+        disabled && "cursor-not-allowed opacity-50 hover:border-mist",
       )}
     >
       <input
         type="radio"
         name={name}
         value={value}
+        disabled={disabled}
         checked={checked}
         onChange={() => onChange(value)}
         className="peer sr-only"

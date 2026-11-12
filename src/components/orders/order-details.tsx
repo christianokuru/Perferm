@@ -3,8 +3,9 @@ import { orderStatusLabels } from "@/lib/catalog/labels";
 import { siteConfig } from "@/lib/config/site";
 import { formatNaira } from "@/lib/money";
 import { providerInfo } from "@/lib/payments/types";
-import type { Order, OrderStatus } from "@/lib/types";
+import type { Order, OrderEvent, OrderStatus } from "@/lib/types";
 import { cn, formatDate } from "@/lib/utils";
+import { formatPhone } from "@/lib/validation/fields";
 
 const deliverySteps: OrderStatus[] = ["paid", "processing", "shipped", "delivered"];
 const pickupSteps: OrderStatus[] = ["paid", "processing", "ready_for_pickup", "delivered"];
@@ -23,7 +24,16 @@ export function OrderStatusBadge({ status }: { status: OrderStatus }) {
 }
 
 export function OrderTimeline({ order }: { order: Order }) {
-  if (order.status === "cancelled") return null;
+  if (order.status === "cancelled") {
+    return (
+      <p className="rounded-[var(--radius-card)] bg-danger/5 p-4 text-body-sm text-danger">
+        {order.cancelReason === "expired" ? "Payment was not completed, so this order was released." : `Cancelled${order.cancelReason ? ` — ${order.cancelReason}` : ""}.`}
+      </p>
+    );
+  }
+  if (order.status === "pending") {
+    return <p className="rounded-[var(--radius-card)] bg-saffron/10 p-4 text-body-sm text-ink">We&apos;re waiting for your payment to be confirmed.</p>;
+  }
   const steps = order.fulfilment.method === "pickup" ? pickupSteps : deliverySteps;
   const current = steps.indexOf(order.status);
   return (
@@ -71,7 +81,7 @@ export function OrderDetails({ order }: { order: Order }) {
             <dd className="tabular-nums">{order.totals.deliveryFee ? formatNaira(order.totals.deliveryFee) : "Free"}</dd>
           </div>
           <div className="flex items-baseline justify-between border-t border-mist pt-3">
-            <dt className="text-body text-ink">Total paid</dt>
+            <dt className="text-body text-ink">{order.status === "pending" || order.status === "cancelled" ? "Total" : "Total paid"}</dt>
             <dd className="text-subheading font-light tabular-nums">{formatNaira(order.totals.total)}</dd>
           </div>
         </dl>
@@ -91,7 +101,7 @@ export function OrderDetails({ order }: { order: Order }) {
               <>
                 {siteConfig.boutique.name}
                 <br />
-                {siteConfig.boutique.street}, {siteConfig.boutique.area}
+                {f.location ?? `${siteConfig.boutique.street}, ${siteConfig.boutique.area}`}
               </>
             ) : (
               <>
@@ -101,7 +111,7 @@ export function OrderDetails({ order }: { order: Order }) {
               </>
             )}
             <br />
-            {order.customer.phone}
+            {formatPhone(order.customer.phone)}
           </dd>
         </div>
         <div>
@@ -113,5 +123,38 @@ export function OrderDetails({ order }: { order: Order }) {
         </div>
       </dl>
     </div>
+  );
+}
+
+const eventCopy: Record<OrderEvent["kind"], string> = {
+  created: "Order placed",
+  payment: "Payment",
+  status: "Status updated",
+  note: "Note",
+  stock: "Inventory",
+};
+
+/** Chronological activity log. Internal notes only appear when the caller passes them (admin). */
+export function OrderHistory({ order, className }: { order: Order; className?: string }) {
+  if (!order.events.length) return null;
+  return (
+    <section className={className} aria-labelledby={`history-${order.reference}`}>
+      <h2 id={`history-${order.reference}`} className="text-body text-ink">
+        History
+      </h2>
+      <ol className="mt-4 space-y-3 border-l border-mist pl-5">
+        {[...order.events].reverse().map((event, i) => (
+          <li key={`${event.createdAt}-${i}`} className="relative">
+            <span aria-hidden="true" className={cn("absolute top-1.5 -left-[1.42rem] size-2 rounded-full", event.internal ? "bg-graphite" : "bg-saffron")} />
+            <p className="text-body-sm text-ink">
+              {event.kind === "status" && event.status ? orderStatusLabels[event.status] : eventCopy[event.kind]}
+              {event.internal ? <span className="ml-2 text-caption text-smoke">internal</span> : null}
+            </p>
+            {event.message && event.kind !== "status" ? <p className="text-body-sm text-graphite">{event.message}</p> : null}
+            <p className="text-caption text-smoke">{formatDate(event.createdAt, { dateStyle: "medium", timeStyle: "short" })}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }

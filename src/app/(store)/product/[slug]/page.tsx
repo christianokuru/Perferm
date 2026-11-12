@@ -1,21 +1,22 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { DropIcon, GiftIcon, ShieldIcon, TruckIcon } from "@/components/icons";
 import { ReviewCard } from "@/components/reviews/review-card";
+import { ReviewForm } from "@/components/reviews/review-form";
 import { NotesPyramid } from "@/components/product/notes-pyramid";
 import { ProductGallery } from "@/components/product/product-gallery";
 import { ProductPurchase } from "@/components/product/product-purchase";
 import { ProductRail } from "@/components/product/product-rail";
 import { JsonLd } from "@/components/seo/json-ld";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
-import { Badge, Breadcrumbs, Rating } from "@/components/ui/misc";
+import { Badge, Breadcrumbs, Rating, Skeleton } from "@/components/ui/misc";
 import { Accent, Eyebrow } from "@/components/ui/typography";
 import { concentrationLabels, familyLabels, genderLabels } from "@/lib/catalog/labels";
-import { getProductBySlug, getProducts, getRelatedProducts } from "@/lib/catalog/repository";
+import { getProductBySlug, getProductReviews, getProducts, getRelatedProducts } from "@/lib/catalog/repository";
 import { toSummary } from "@/lib/catalog/summary";
 import { siteConfig } from "@/lib/config/site";
-import { getProductReviews } from "@/lib/data/reviews";
 import { breadcrumbJsonLd, pageMetadata, productJsonLd } from "@/lib/seo";
 
 export async function generateStaticParams() {
@@ -35,12 +36,12 @@ export async function generateMetadata({ params }: PageProps<"/product/[slug]">)
   });
 }
 
-export default async function ProductPage({ params }: PageProps<"/product/[slug]">) {
+async function ProductPageContent({ params }: Pick<PageProps<"/product/[slug]">, "params">) {
   const { slug } = await params;
   const product = await getProductBySlug(slug);
   if (!product) notFound();
 
-  const [related, reviews] = await Promise.all([getRelatedProducts(product), Promise.resolve(getProductReviews(product.id))]);
+  const [related, reviews] = await Promise.all([getRelatedProducts(product), getProductReviews(product.id)]);
   const summary = toSummary(product);
   const crumbs = [
     { label: "Home", href: "/" },
@@ -75,9 +76,11 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
               {product.name}
             </h1>
             <p className="mt-3 font-serif text-[1.35rem] text-graphite/80 italic">{product.tagline}</p>
-            <a href="#reviews" className="mt-4 inline-block">
-              <Rating value={product.rating} count={product.reviewCount} />
-            </a>
+            {product.reviewCount ? (
+              <a href="#reviews" className="mt-4 inline-block">
+                <Rating value={product.rating} count={product.reviewCount} />
+              </a>
+            ) : null}
 
             <div className="mt-8">
               <ProductPurchase summary={summary} variants={product.variants} />
@@ -157,18 +160,27 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
             <h2 id="reviews-title" className="text-heading font-light text-ink">
               client <Accent>reviews</Accent>
             </h2>
-            <div className="flex items-baseline gap-3">
-              <span className="text-[3.5rem] leading-none font-extralight tracking-[-0.08em] text-ink">{product.rating.toFixed(1)}</span>
-              <Rating value={product.rating} count={product.reviewCount} />
-            </div>
+            {product.reviewCount ? (
+              <div className="flex items-baseline gap-3">
+                <span className="text-[3.5rem] leading-none font-extralight tracking-[-0.08em] text-ink">{product.rating.toFixed(1)}</span>
+                <Rating value={product.rating} count={product.reviewCount} />
+              </div>
+            ) : null}
           </div>
-          <ul className="mt-10 grid grid-cols-1 gap-3 md:grid-cols-3">
-            {reviews.map((review) => (
-              <li key={review.id} className="relative bg-white">
-                <ReviewCard review={review} />
-              </li>
-            ))}
-          </ul>
+          {reviews.length ? (
+            <ul className="mt-10 grid grid-cols-1 gap-3 md:grid-cols-3">
+              {reviews.map((review) => (
+                <li key={review.id} className="relative bg-white">
+                  <ReviewCard review={review} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-6 text-body-sm text-smoke">No reviews yet — be the first to share your impressions.</p>
+          )}
+          <div className="mt-6 max-w-2xl">
+            <ReviewForm productId={product.id} productSlug={product.slug} />
+          </div>
         </div>
       </section>
 
@@ -179,5 +191,31 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
         <ProductRail label="Related fragrances" products={related} />
       </section>
     </>
+  );
+}
+
+/** Instant shell for slugs that weren't prerendered (e.g. products added after a deploy). */
+function ProductPageSkeleton() {
+  return (
+    <div className="container-page grid grid-cols-1 gap-8 pt-8 pb-24 md:grid-cols-[1.15fr_1fr]" aria-busy="true" aria-label="Loading">
+      <Skeleton className="aspect-[4/5]" />
+      <div className="space-y-4">
+        <Skeleton className="h-6 w-1/3" />
+        <Skeleton className="h-14 w-2/3" />
+        <Skeleton className="h-40" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The slug is read inside <Suspense>: prerendered slugs stay fully static, and
+ * new ones get an instant shell, render on first visit, then cache (ISR).
+ */
+export default function ProductPage({ params }: PageProps<"/product/[slug]">) {
+  return (
+    <Suspense fallback={<ProductPageSkeleton />}>
+      <ProductPageContent params={params} />
+    </Suspense>
   );
 }

@@ -3,9 +3,9 @@
  *  - navigations: network-first, fall back to cached page, then /offline
  *  - /_next/static: cache-first (immutable, hashed)
  *  - images: stale-while-revalidate, capped
- * Never caches API calls, admin/account pages, cross-origin or non-OK responses.
+ * Never caches API calls, private/auth pages, cross-origin or non-OK responses.
  */
-const VERSION = "v1";
+const VERSION = "v2";
 const SHELL = `perferm-shell-${VERSION}`;
 const PAGES = `perferm-pages-${VERSION}`;
 const ASSETS = `perferm-assets-${VERSION}`;
@@ -49,7 +49,7 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  if (/^\/(api|admin|account|checkout)(\/|$)/.test(url.pathname)) return;
+  if (/^\/(api|admin|account|checkout|auth|login|register|forgot-password|reset-password|track)(\/|$)/.test(url.pathname)) return;
   if (request.headers.has("rsc") || url.searchParams.has("_rsc")) return;
 
   if (request.mode === "navigate") {

@@ -1,13 +1,13 @@
 # Perferm — Maison de Parfum
 
-A mobile-first, installable (PWA) luxury storefront for Arabian and niche perfumery in Nigeria. Built with Next.js 16 (App Router, Cache Components, React Compiler), Tailwind CSS v4, Zustand and Zod.
+A mobile-first, installable (PWA) luxury storefront for Arabian and niche perfumery in Nigeria. Built with Next.js 16 (App Router, Cache Components, React Compiler), Supabase (Postgres, Auth, Storage), Tailwind CSS v4, Zustand and Zod. Payments through Paystack and Flutterwave, emails through Resend.
 
 The design follows an editorial "gallery" system: a white canvas, whisper-weight Onest display type with an Instrument Serif italic accent, one saffron accent colour, hairline borders, pill actions and no shadows.
 
 ## Quick start
 
 ```bash
-cp .env.example .env.local   # then fill in values as needed
+cp .env.example .env.local   # fill in Supabase, payment and email keys
 npm install
 npm run dev                  # http://localhost:3000
 ```
@@ -18,62 +18,60 @@ Production build (the service worker only registers in production):
 npm run build && npm run start
 ```
 
+### Database
+
+The schema lives in `supabase/migrations/` (apply in order) and the starter catalogue in `supabase/seed.sql`. Background jobs (expiring unpaid checkouts, purging rate-limit rows) run on `pg_cron`.
+
+**First admin:** sign up on the site, then in the Supabase SQL editor run
+`update public.profiles set role = 'admin' where email = 'you@example.com';`
+After that, admins can promote others from **Admin → Customers**.
+
 ## What's included
 
 | Area | Routes |
 | --- | --- |
-| Storefront | `/`, `/shop` (search, filters and sort, all held in the URL), `/collections/[slug]`, `/product/[slug]` |
-| Commerce | Bag drawer and `/cart`, `/checkout` (state-based delivery or free pickup, Paystack / Flutterwave), `/checkout/success`, `/wishlist` |
-| Accounts | `/login`, `/register`, `/forgot-password`, `/account` (overview, orders and order tracking, addresses, settings) |
-| Admin | `/admin` (dashboard, product CRUD with image upload, orders and status, customers, delivery fees per state, store settings) |
-| Content | `/about`, `/contact`, `/faq`, `/delivery`, `/returns`, `/privacy`, `/terms`, `/offline`, 404 |
-| SEO and PWA | Per-page metadata and canonicals, Product / Breadcrumb / FAQ / Organization / WebSite JSON-LD, sitemap, robots, OG image, manifest with app icons and shortcuts, offline-capable service worker |
+| Storefront | `/`, `/shop` (search, filters and sort, all held in the URL), `/collections/[slug]`, `/product/[slug]` (verified-purchase reviews) |
+| Commerce | Bag drawer and `/cart`, `/checkout` (state-based delivery or free pickup, Paystack / Flutterwave), `/checkout/success`, `/track` (guest order tracking), `/wishlist` (synced to the account) |
+| Accounts | `/login`, `/register` (email confirmation), `/forgot-password`, `/reset-password`, `/auth/callback`, `/auth/confirm`, `/account` (overview, orders with history, addresses, profile, email, password, sign out everywhere, delete account) |
+| Admin | `/admin` dashboard (revenue, 14-day chart, alerts, low stock, best sellers), products (create/edit/archive, Storage uploads), orders (search, filters, status workflow, internal notes), customers (search, roles), reviews (moderation), messages + newsletter CSV export, delivery fees per state, store settings |
+| Webhooks | `/api/webhooks/paystack`, `/api/webhooks/flutterwave` |
+| SEO and PWA | Per-page metadata and canonicals, Product / Breadcrumb / FAQ / Organization / WebSite JSON-LD, sitemap, robots, OG image, manifest, offline-capable service worker |
 
 ## Architecture
 
 ```
 src/
-  app/                 routes: (store) storefront, (auth) sign-in flows, admin, api, actions (server actions)
+  app/                 routes; actions/ = server actions (checkout, account, admin, reviews, wishlist, contact…)
   components/          UI by domain: ui/ primitives, layout/, product/, shop/, cart/, checkout/, account/, admin/ …
   lib/
-    catalog/           repository (the only data-access layer), pure filters, labels, summaries
-    checkout/pricing   authoritative server-side pricing (server-only)
-    validation/        Zod schemas shared by client and server
-    payments/          Paystack / Flutterwave inline adapters
-    data/              seed catalogue, collections, delivery zones, reviews
-  stores/              Zustand stores (cart, wishlist, auth, orders, admin, ui)
-  proxy.ts             real 404s for unknown product and collection slugs
+    auth/session.ts    Data Access Layer: verified session (getClaims), requireViewer / requireAdmin
+    supabase/          clients: server (as the user, RLS), client (browser), admin (service role), public (cached reads), proxy
+    catalog/           cached public catalogue reads + mappers (tagged; admin edits call updateTag)
+    checkout/          live server-side pricing and checkout config
+    orders/            order reads for customers, guests (secret key) and admins
+    payments/server/   gateway verification, idempotent confirmation, webhook log
+    email/             Resend sender, escaped templates, notifications
+    admin/queries.ts   admin reads (never cached)
+  stores/              Zustand: cart, wishlist, session mirror, ui
+  proxy.ts             session refresh, private-area gate, real 404s for unknown slugs
+supabase/migrations    schema, functions, RLS + grants, storage, cron
 ```
 
-To move to Supabase, change `lib/catalog/repository.ts`, `lib/checkout/pricing.ts`, the server actions and the stores. Components don't change.
+## Security model
 
-## Security
+- **Postgres is the boundary.** Every table has RLS. Anonymous and signed-in roles are default-deny with column-level grants; customers can only touch their own rows, and roles can never be self-assigned.
+- **Server-authoritative money.** The browser sends only variant IDs and quantities. Pricing is read live from the database and re-checked inside `create_order()`; a tampered price is ignored and the bag is corrected.
+- **Payments are verified, never trusted.** Orders start `pending`. They become `paid` only after a server-to-server check with the gateway (amount, currency, reference), through the idempotent `confirm_order_payment()`. That function locks the order and decrements stock exactly once, so a redirect racing a webhook is safe. Webhooks are authenticated (Paystack HMAC-SHA512, Flutterwave `verif-hash`) and de-duplicated.
+- **Admin actions** re-verify the admin role on the server and run as the admin's own session, so RLS and the `SECURITY DEFINER` checks are a second gate. The order state machine is enforced in SQL, and admin changes are written to `audit_log`.
+- **Guests** view their confirmation with a random secret whose hash is stored on the order, compared in constant time. `/track` needs reference + email, is rate-limited, and masks the address and phone.
+- **Rate limits** are shared across instances (Postgres) and keyed by hashed IP: search, quote, checkout, verify, contact, newsletter, tracking, reviews, wishlist, account changes.
+- **Auth** runs from the browser, so Supabase's per-IP protections see real visitors. Redirects accept same-origin paths only, sign-in errors are generic, and password changes and account deletion require the current password.
+- **Headers:** CSP (locked to Supabase and the payment hosts), HSTS, `X-Frame-Options: DENY`, `nosniff`, Referrer-Policy and Permissions-Policy. `noindex` and `no-store` on private pages. CSV exports neutralise formula injection.
 
-- **Server-authoritative pricing:** the browser sends only product IDs and quantities, and the server re-prices every order from the catalogue. A price tampered with in localStorage is ignored, and the bag is corrected to the server price.
-- **Validation:** all input is validated with Zod on both client and server. Query parameters are checked against allow-lists.
-- **Rate limiting** on search, checkout, contact and newsletter. **Honeypots** on the public forms.
-- **Strict headers:** CSP (locked to the payment and image hosts), HSTS, `X-Frame-Options: DENY`, `nosniff`, Referrer-Policy and Permissions-Policy. `noindex` on the private areas.
-- **Login protections:** redirects after login accept only internal paths (no open redirects). Login errors are generic, so they don't reveal which accounts exist.
-- **Escaped structured data:** JSON-LD output is escaped so content can't break out of the script tag.
-- **Card data never touches this app:** only *public* gateway keys live in the browser.
+## Environment
 
-### Demo mode — what changes with Supabase
+See `.env.example`. Secrets (`SUPABASE_SECRET_KEY`, `PAYSTACK_SECRET_KEY`, `FLUTTERWAVE_SECRET_KEY`, `FLUTTERWAVE_WEBHOOK_HASH`, `RESEND_API_KEY`) are server-only and must never use the `NEXT_PUBLIC_` prefix. A gateway goes live only when **both** its public and secret keys are set. Otherwise checkout offers a clearly labelled test-payment screen, but only if `PAYMENTS_DEMO_MODE=true` (on by default in development, off in production).
 
-Until a backend is connected:
+## Checks
 
-- **Auth:** accounts, orders and admin edits are stored in the browser through a demo adapter. Passwords are PBKDF2-hashed, with lockout after 5 failed attempts. This is **not a security boundary**.
-- **Admin edits stay in the browser:** they don't reach the storefront or checkout yet. Checkout always prices orders on the server.
-
-Before going live:
-
-1. Replace the demo auth adapter with Supabase Auth, and enforce `/admin` and `/account` server-side (proxy + RLS).
-2. Create orders as `pending` server-side, and mark them paid only after **verifying the Paystack / Flutterwave webhook and verify endpoint** with the *secret* keys. Never trust the client callback.
-3. Swap the in-memory rate limiter for Redis or Upstash.
-4. Replace the Pexels placeholder photography with the house's own product shots.
-
-## Testing notes
-
-- **Payments:** with no public keys set, checkout uses a clearly labelled *demo gateway* (approve, decline or cancel). Add `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` (`pk_test_…`) or `NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY` (`FLWPUBK_TEST-…`) to use the real inline test checkouts.
-- **Admin access (demo):** register with an email listed in `NEXT_PUBLIC_DEMO_ADMIN_EMAILS` (default `admin@perferm.ng`) to get the admin role.
-- **Accounts:** the demo accounts used in browser testing live only in that browser's localStorage. Clear site data to reset.
-- **Checks:** `npm run lint` and `npm run build` must pass, with zero warnings.
+`npm run lint` and `npm run build` must pass with zero warnings. After schema changes, run the Supabase security advisor.

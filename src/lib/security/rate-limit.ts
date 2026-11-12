@@ -1,26 +1,33 @@
 import "server-only";
 
-/**
- * Best-effort in-memory sliding window limiter for route handlers and server
- * actions. Per-instance only — swap for Upstash/Redis when deployed at scale.
- */
-const buckets = new Map<string, number[]>();
-const MAX_KEYS = 5_000;
+import { createHash } from "node:crypto";
 
-export function rateLimit(key: string, limit: number, windowMs: number): { ok: boolean; retryAfter: number } {
-  const now = Date.now();
-  const hits = (buckets.get(key) ?? []).filter((t) => now - t < windowMs);
-  if (hits.length >= limit) {
-    buckets.set(key, hits);
-    return { ok: false, retryAfter: Math.ceil((windowMs - (now - hits[0])) / 1000) };
+import { createAdminClient } from "@/lib/supabase/admin";
+
+/**
+ * Shared fixed-window rate limiter backed by Postgres, so limits hold across
+ * every serverless instance. Keys are hashed — raw IPs are never stored.
+ * Fails open (allows the request) if the database is unreachable, so an
+ * outage never locks customers out of checkout.
+ */
+export async function rateLimit(key: string, limit: number, windowMs: number): Promise<{ ok: boolean }> {
+  try {
+    const bucket = createHash("sha256").update(key).digest("hex");
+    const { data, error } = await createAdminClient().rpc("rate_limit_hit", {
+      p_bucket: bucket,
+      p_limit: limit,
+      p_window_seconds: Math.max(1, Math.round(windowMs / 1000)),
+    });
+    if (error) throw error;
+    return { ok: data !== false };
+  } catch (error) {
+    console.error("[rate-limit] check failed, allowing request", error);
+    return { ok: true };
   }
-  hits.push(now);
-  if (buckets.size > MAX_KEYS) buckets.delete(buckets.keys().next().value as string);
-  buckets.set(key, hits);
-  return { ok: true, retryAfter: 0 };
 }
 
+/** Identifies the caller by IP (Vercel sets x-forwarded-for / x-real-ip). */
 export function clientKey(headers: Headers, scope: string): string {
   const forwarded = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return `${scope}:${forwarded || headers.get("x-real-ip") || "anonymous"}`;
+  return `${scope}:${headers.get("x-real-ip") || forwarded || "anonymous"}`;
 }

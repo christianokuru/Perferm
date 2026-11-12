@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { GridIcon, HomeIcon, LogoutIcon, PinIcon, ReceiptIcon, SettingsIcon } from "@/components/icons";
 import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
-import { useAuthStore, useCurrentUser } from "@/stores/auth-store";
+import { createClient } from "@/lib/supabase/client";
+import { useSessionStore, useViewer } from "@/stores/session-store";
 
 const links = [
   { href: "/account", label: "Overview", icon: HomeIcon },
@@ -17,12 +18,15 @@ const links = [
 
 export function AccountNav() {
   const pathname = usePathname();
-  const logout = useAuthStore((s) => s.logout);
-  const user = useCurrentUser();
+  const router = useRouter();
+  const user = useViewer();
 
-  const signOut = () => {
-    logout();
+  const signOut = async () => {
+    await createClient().auth.signOut({ scope: "local" });
+    useSessionStore.getState().markSignedOut();
     toast.show("You've been signed out");
+    router.replace("/");
+    router.refresh();
   };
 
   return (

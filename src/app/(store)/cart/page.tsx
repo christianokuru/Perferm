@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { CartView } from "@/components/cart/cart-view";
+import { getDeliveryZones } from "@/lib/catalog/repository";
 import { PageIntro } from "@/components/shop/page-intro";
 import { Accent } from "@/components/ui/typography";
 import { pageMetadata } from "@/lib/seo";
@@ -12,7 +13,9 @@ export const metadata: Metadata = pageMetadata({
   noIndex: true,
 });
 
-export default function CartPage() {
+export default async function CartPage() {
+  const zones = await getDeliveryZones();
+  const lowestFee = zones.length ? Math.min(...zones.map((z) => z.fee)) : 0;
   return (
     <>
       <PageIntro
@@ -24,7 +27,7 @@ export default function CartPage() {
         }
       />
       <div className="container-page pb-20">
-        <CartView />
+        <CartView lowestFee={lowestFee} />
       </div>
     </>
   );

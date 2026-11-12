@@ -6,7 +6,7 @@ import { ShieldIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { formatNaira } from "@/lib/money";
-import { isLive, payWithFlutterwave, payWithPaystack } from "@/lib/payments/inline-gateways";
+import { payWithFlutterwave, payWithPaystack } from "@/lib/payments/inline-gateways";
 import { providerInfo, type PaymentOutcome, type PaymentRequest } from "@/lib/payments/types";
 
 /**
@@ -20,7 +20,7 @@ export function usePaymentGateway() {
 
   const pay = useCallback(async (request: PaymentRequest): Promise<PaymentOutcome> => {
     try {
-      if (isLive(request.provider)) {
+      if (request.mode === "live") {
         return request.provider === "paystack" ? await payWithPaystack(request) : await payWithFlutterwave(request);
       }
     } catch {
@@ -66,8 +66,8 @@ export function usePaymentGateway() {
             </div>
           </dl>
           <p className="mt-4 text-caption text-smoke">
-            Add <code className="rounded bg-pearl px-1">NEXT_PUBLIC_{demoRequest.provider.toUpperCase()}_PUBLIC_KEY</code> to
-            enable the real {providerInfo[demoRequest.provider].name} checkout.
+            This store is in test mode for {providerInfo[demoRequest.provider].name}. The order is still created and confirmed on the
+            server, exactly as a real payment would be.
           </p>
           <div className="mt-6 grid gap-2">
             <Button

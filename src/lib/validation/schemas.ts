@@ -35,6 +35,34 @@ export const registerSchema = z
 
 export const forgotPasswordSchema = z.object({ email: emailField });
 
+export const resetPasswordSchema = z
+  .object({ password: passwordField, confirmPassword: z.string() })
+  .refine((d) => d.password === d.confirmPassword, { message: "Passwords do not match", path: ["confirmPassword"] });
+
+export const changeEmailSchema = z.object({ email: emailField });
+
+export const deleteAccountSchema = z.object({
+  password: z.string().max(128).optional(),
+  confirm: z.literal("DELETE", "Type DELETE to confirm"),
+});
+
+export const trackOrderSchema = z.object({
+  reference: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^PF-[A-Z0-9]{8}$/, "Enter the reference from your receipt, e.g. PF-7K3Q9X2M"),
+  email: emailField,
+});
+
+export const reviewSchema = z.object({
+  productId: z.uuid(),
+  rating: z.number().int().min(1, "Choose a rating").max(5),
+  title: z.string().trim().min(2, "Add a short title").max(80, "Title is too long"),
+  body: z.string().trim().min(10, "Tell us a little more (10+ characters)").max(1500, "Review is too long"),
+  city: optionalText(60),
+});
+
 export const profileSchema = z.object({ name: nameField, phone: phoneField });
 
 export const changePasswordSchema = z
@@ -70,8 +98,8 @@ export const contactSchema = z.object({
 export const newsletterSchema = z.object({ email: emailField, website: honeypotField });
 
 export const cartLineSchema = z.object({
-  productId: z.string().min(1).max(64),
-  variantId: z.string().min(1).max(96),
+  productId: z.uuid(),
+  variantId: z.uuid(),
   quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
 });
 

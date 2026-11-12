@@ -31,7 +31,7 @@ interface CartState {
   remove: (variantId: string) => void;
   clear: () => void;
   /** Replace display prices/quantities with the server's authoritative quote. */
-  reconcile: (authoritative: Array<{ variantId: string; unitPrice: Kobo; quantity: number }>) => void;
+  reconcile: (authoritative: Array<{ variantId: string | null; unitPrice: Kobo; quantity: number }>) => void;
 }
 
 const clampQuantity = (quantity: number) => Math.max(1, Math.min(MAX_LINE_QUANTITY, Math.floor(quantity)));
@@ -72,7 +72,7 @@ export const useCartStore = create<CartState>()(
         if (changed) set({ lines: next });
       },
     }),
-    persistOptions<CartState>("cart", 1, { partialize: (s) => ({ lines: s.lines }) as CartState }),
+    persistOptions<CartState>("cart", 2, { partialize: (s) => ({ lines: s.lines }) as CartState }),
   ),
 );
 

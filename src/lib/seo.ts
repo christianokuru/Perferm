@@ -111,7 +111,10 @@ export function productJsonLd(product: Product, reviews: Review[]) {
     sku: product.variants[0]?.id,
     brand: { "@type": "Brand", name: product.house },
     category: "Health & Beauty > Personal Care > Cosmetics > Perfume & Cologne",
-    aggregateRating: { "@type": "AggregateRating", ratingValue: product.rating, reviewCount: product.reviewCount },
+    // Only real, approved reviews are described — Google rejects empty ratings.
+    ...(product.reviewCount
+      ? { aggregateRating: { "@type": "AggregateRating", ratingValue: product.rating, reviewCount: product.reviewCount } }
+      : {}),
     review: reviews.map((r) => ({
       "@type": "Review",
       author: { "@type": "Person", name: r.author },

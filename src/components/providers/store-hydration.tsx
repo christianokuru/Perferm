@@ -2,16 +2,12 @@
 
 import { useEffect } from "react";
 
-import { useAuthStore } from "@/stores/auth-store";
 import { useCartStore } from "@/stores/cart-store";
-import { useOrderStore } from "@/stores/order-store";
 import { useWishlistStore } from "@/stores/wishlist-store";
 
 const stores = {
   "perferm:cart": useCartStore,
   "perferm:wishlist": useWishlistStore,
-  "perferm:auth": useAuthStore,
-  "perferm:orders": useOrderStore,
 } as const;
 
 /**

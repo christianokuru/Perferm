@@ -56,6 +56,7 @@ export const footerNav = {
     { label: "Unisex", href: "/shop?gender=unisex" },
   ],
   care: [
+    { label: "Track an order", href: "/track" },
     { label: "Delivery", href: "/delivery" },
     { label: "Returns", href: "/returns" },
     { label: "FAQ", href: "/faq" },

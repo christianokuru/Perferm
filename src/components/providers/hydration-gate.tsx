@@ -3,28 +3,19 @@
 import type { ReactNode } from "react";
 
 import { Skeleton } from "@/components/ui/misc";
-import { useAuthStore } from "@/stores/auth-store";
 import { useCartStore } from "@/stores/cart-store";
-import { useOrderStore } from "@/stores/order-store";
+import { useSessionStatus } from "@/stores/session-store";
 import { useHydrated } from "@/stores/storage";
 import { useWishlistStore } from "@/stores/wishlist-store";
 
-const registry = {
-  auth: useAuthStore,
-  cart: useCartStore,
-  orders: useOrderStore,
-  wishlist: useWishlistStore,
-} as const;
-
-type StoreName = keyof typeof registry;
+type StoreName = "cart" | "wishlist" | "session";
 
 function useAllHydrated(names: StoreName[]): boolean {
-  // Hooks are called in a fixed order for a given `names` list.
-  const auth = useHydrated(registry.auth);
-  const cart = useHydrated(registry.cart);
-  const orders = useHydrated(registry.orders);
-  const wishlist = useHydrated(registry.wishlist);
-  const state: Record<StoreName, boolean> = { auth, cart, orders, wishlist };
+  // Hooks are always called in the same order.
+  const cart = useHydrated(useCartStore);
+  const wishlist = useHydrated(useWishlistStore);
+  const session = useSessionStatus() !== "loading";
+  const state: Record<StoreName, boolean> = { cart, wishlist, session };
   return names.every((n) => state[n]);
 }
 

@@ -2,20 +2,23 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import { CheckIcon } from "@/components/icons";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Checkbox, Field, FormMessage, Input, PasswordInput } from "@/components/ui/form";
 import { toast } from "@/components/ui/toast";
 import { Accent } from "@/components/ui/typography";
+import { authErrorMessage, isEmailNotConfirmed } from "@/lib/auth/errors";
+import { publicEnv } from "@/lib/config/public-env";
 import { focusFirstError } from "@/lib/focus";
+import { createClient } from "@/lib/supabase/client";
 import { cn, safeRedirectPath } from "@/lib/utils";
 import { validate, type FieldErrors } from "@/lib/validation/fields";
-import { forgotPasswordSchema, loginSchema, registerSchema } from "@/lib/validation/schemas";
-import { useAuthStore, useCurrentUser } from "@/stores/auth-store";
+import { forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema } from "@/lib/validation/schemas";
+import { useSessionStatus, useViewer } from "@/stores/session-store";
 
-function AuthHeading({ title, accent, lead }: { title: string; accent: string; lead: React.ReactNode }) {
+export function AuthHeading({ title, accent, lead }: { title: string; accent: string; lead: ReactNode }) {
   return (
     <div className="mb-10">
       <h1 className="text-[3rem] leading-[0.92] font-extralight tracking-[-0.075em] text-ink md:text-[3.75rem]">
@@ -30,7 +33,7 @@ function AuthHeading({ title, accent, lead }: { title: string; accent: string; l
 function SignedInNotice({ name, next }: { name: string; next: string }) {
   return (
     <div className="space-y-6">
-      <AuthHeading title="welcome," accent={name.split(" ")[0]} lead="You're already signed in." />
+      <AuthHeading title="welcome," accent={name.split(" ")[0] || "back"} lead="You're already signed in." />
       <ButtonLink href={next} size="lg" block>
         Continue
       </ButtonLink>
@@ -42,21 +45,88 @@ function useNextPath() {
   return safeRedirectPath(useSearchParams().get("next"));
 }
 
+/** Where Supabase sends people back to after an email link or OAuth. Must be in the project's redirect allow-list. */
+function callbackUrl(next: string) {
+  return `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+}
+
+/** Resend button with a cooldown, so the confirmation email can't be spammed. */
+function ResendConfirmation({ email, next }: { email: string; next: string }) {
+  const [cooldown, setCooldown] = useState(0);
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (!cooldown) return;
+    const timer = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
+
+  const resend = async () => {
+    setPending(true);
+    const { error } = await createClient().auth.resend({ type: "signup", email, options: { emailRedirectTo: callbackUrl(next) } });
+    setPending(false);
+    if (error) return toast.error(authErrorMessage(error));
+    toast.success("A new confirmation link is on its way");
+    setCooldown(60);
+  };
+
+  return (
+    <Button variant="outline" onClick={resend} loading={pending} disabled={cooldown > 0} block>
+      {cooldown ? `Resend available in ${cooldown}s` : "Resend confirmation email"}
+    </Button>
+  );
+}
+
+function Divider() {
+  return (
+    <div className="my-6 flex items-center gap-3 text-caption text-smoke" aria-hidden="true">
+      <span className="h-px flex-1 bg-mist" />
+      or
+      <span className="h-px flex-1 bg-mist" />
+    </div>
+  );
+}
+
+function GoogleButton({ next }: { next: string }) {
+  const [pending, setPending] = useState(false);
+  if (!publicEnv.googleAuth) return null;
+
+  const onClick = async () => {
+    setPending(true);
+    const { error } = await createClient().auth.signInWithOAuth({ provider: "google", options: { redirectTo: callbackUrl(next) } });
+    if (error) {
+      setPending(false);
+      toast.error(authErrorMessage(error));
+    }
+  };
+
+  return (
+    <>
+      <Divider />
+      <Button variant="outline" size="lg" block onClick={onClick} loading={pending}>
+        Continue with Google
+      </Button>
+    </>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 
 export function LoginForm() {
   const router = useRouter();
   const next = useNextPath();
-  const login = useAuthStore((s) => s.login);
-  const user = useCurrentUser();
+  const params = useSearchParams();
+  const viewer = useViewer();
   const [values, setValues] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(params.get("error") === "link" ? "That link is invalid or has expired. Please try again." : null);
+  const [unconfirmed, setUnconfirmed] = useState(false);
   const [pending, setPending] = useState(false);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setFormError(null);
+    setUnconfirmed(false);
     const parsed = validate(loginSchema, values);
     if (!parsed.ok) {
       setErrors(parsed.errors);
@@ -64,14 +134,18 @@ export function LoginForm() {
     }
     setErrors({});
     setPending(true);
-    const result = await login(parsed.data.email, parsed.data.password);
-    setPending(false);
-    if (!result.ok) return setFormError(result.error);
+    const { error } = await createClient().auth.signInWithPassword(parsed.data);
+    if (error) {
+      setPending(false);
+      setUnconfirmed(isEmailNotConfirmed(error));
+      return setFormError(authErrorMessage(error));
+    }
     toast.success("Welcome back");
     router.replace(next);
+    router.refresh();
   };
 
-  if (user && !pending) return <SignedInNotice name={user.name} next={next} />;
+  if (viewer && !pending) return <SignedInNotice name={viewer.name} next={next} />;
 
   return (
     <>
@@ -87,8 +161,19 @@ export function LoginForm() {
           </>
         }
       />
+      {params.get("confirmed") === "1" ? (
+        <div className="mb-5">
+          <FormMessage tone="success">Your email is confirmed. Sign in to continue.</FormMessage>
+        </div>
+      ) : null}
+      {params.get("reset") === "1" ? (
+        <div className="mb-5">
+          <FormMessage tone="success">Your password was updated. Sign in with your new password.</FormMessage>
+        </div>
+      ) : null}
       <form onSubmit={onSubmit} noValidate className="space-y-5">
         {formError ? <FormMessage>{formError}</FormMessage> : null}
+        {unconfirmed ? <ResendConfirmation email={values.email.trim().toLowerCase()} next={next} /> : null}
         <Field label="Email" error={errors.email}>
           {(p) => <Input {...p} type="email" autoComplete="email" inputMode="email" maxLength={254} value={values.email} onChange={(e) => setValues({ ...values, email: e.target.value })} />}
         </Field>
@@ -104,6 +189,7 @@ export function LoginForm() {
           Sign in
         </Button>
       </form>
+      <GoogleButton next={next} />
     </>
   );
 }
@@ -117,15 +203,47 @@ const passwordRules = [
   { label: "Number", test: (v: string) => /\d/.test(v) },
 ];
 
+function PasswordChecklist({ value }: { value: string }) {
+  return (
+    <ul className="-mt-2 flex flex-wrap gap-x-4 gap-y-1 px-1" aria-label="Password requirements">
+      {passwordRules.map((rule) => {
+        const met = rule.test(value);
+        return (
+          <li key={rule.label} className={cn("flex items-center gap-1 text-caption", met ? "text-success" : "text-smoke")}>
+            <CheckIcon size={12} className={met ? "opacity-100" : "opacity-30"} />
+            {rule.label}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function CheckEmailPanel({ email, next }: { email: string; next: string }) {
+  return (
+    <div className="space-y-6">
+      <AuthHeading title="check your" accent="inbox" lead="One last step to secure your account." />
+      <FormMessage tone="success">
+        We&apos;ve sent a confirmation link to {email}. Open it on this device to activate your account — it expires in 24 hours.
+      </FormMessage>
+      <p className="text-body-sm text-smoke">Can&apos;t find it? Check your spam or promotions folder.</p>
+      <ResendConfirmation email={email} next={next} />
+      <Link href="/login" className="block text-center text-body-sm text-ink underline underline-offset-4">
+        Back to sign in
+      </Link>
+    </div>
+  );
+}
+
 export function RegisterForm() {
   const router = useRouter();
   const next = useNextPath();
-  const register = useAuthStore((s) => s.register);
-  const user = useCurrentUser();
+  const viewer = useViewer();
   const [values, setValues] = useState({ name: "", email: "", phone: "", password: "", confirmPassword: "", acceptTerms: false });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   const set = <K extends keyof typeof values>(key: K, value: (typeof values)[K]) => setValues((v) => ({ ...v, [key]: value }));
 
@@ -140,14 +258,26 @@ export function RegisterForm() {
     setErrors({});
     setPending(true);
     const { name, email, phone, password } = parsed.data;
-    const result = await register({ name, email, phone, password });
+    const { data, error } = await createClient().auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: name, phone }, emailRedirectTo: callbackUrl(next) },
+    });
     setPending(false);
-    if (!result.ok) return setFormError(result.error);
-    toast.success(`Welcome to Perferm, ${name.split(" ")[0]}`);
-    router.replace(next);
+    if (error) return setFormError(authErrorMessage(error));
+
+    if (data.session) {
+      toast.success(`Welcome to Perferm, ${name.split(" ")[0]}`);
+      router.replace(next);
+      router.refresh();
+      return;
+    }
+    // Same screen whether the email is new or already registered — no account enumeration.
+    setSentTo(email);
   };
 
-  if (user && !pending) return <SignedInNotice name={user.name} next={next} />;
+  if (sentTo) return <CheckEmailPanel email={sentTo} next={next} />;
+  if (viewer && !pending) return <SignedInNotice name={viewer.name} next={next} />;
 
   return (
     <>
@@ -179,17 +309,7 @@ export function RegisterForm() {
         <Field label="Password" error={errors.password}>
           {(p) => <PasswordInput {...p} autoComplete="new-password" maxLength={128} value={values.password} onChange={(e) => set("password", e.target.value)} />}
         </Field>
-        <ul className="-mt-2 flex flex-wrap gap-x-4 gap-y-1 px-1" aria-label="Password requirements">
-          {passwordRules.map((rule) => {
-            const met = rule.test(values.password);
-            return (
-              <li key={rule.label} className={cn("flex items-center gap-1 text-caption", met ? "text-success" : "text-smoke")}>
-                <CheckIcon size={12} className={met ? "opacity-100" : "opacity-30"} />
-                {rule.label}
-              </li>
-            );
-          })}
-        </ul>
+        <PasswordChecklist value={values.password} />
         <Field label="Confirm password" error={errors.confirmPassword}>
           {(p) => <PasswordInput {...p} autoComplete="new-password" maxLength={128} value={values.confirmPassword} onChange={(e) => set("confirmPassword", e.target.value)} />}
         </Field>
@@ -215,6 +335,7 @@ export function RegisterForm() {
           Create account
         </Button>
       </form>
+      <GoogleButton next={next} />
     </>
   );
 }
@@ -233,9 +354,12 @@ export function ForgotPasswordForm() {
     if (!parsed.ok) return setError(parsed.errors.email);
     setError(null);
     setPending(true);
-    // TODO(supabase): supabase.auth.resetPasswordForEmail(email, { redirectTo }).
-    await new Promise((r) => setTimeout(r, 600));
+    const { error: authError } = await createClient().auth.resetPasswordForEmail(parsed.data.email, {
+      redirectTo: callbackUrl("/reset-password"),
+    });
     setPending(false);
+    // Only rate limiting is surfaced; anything else shows the same message (no account enumeration).
+    if (authError?.status === 429) return setError(authErrorMessage(authError));
     setSent(true);
   };
 
@@ -244,8 +368,7 @@ export function ForgotPasswordForm() {
       <AuthHeading title="reset your" accent="password" lead="Enter the email on your account and we'll send you a secure reset link." />
       {sent ? (
         <div className="space-y-6">
-          {/* Same message whether or not the account exists — no user enumeration. */}
-          <FormMessage tone="success">If an account exists for {email}, a reset link is on its way. It expires in 30 minutes.</FormMessage>
+          <FormMessage tone="success">If an account exists for {email.trim().toLowerCase()}, a reset link is on its way. It expires in 1 hour.</FormMessage>
           <Link href="/login" className="inline-block text-body-sm text-ink underline underline-offset-4">
             Back to sign in
           </Link>
@@ -263,6 +386,73 @@ export function ForgotPasswordForm() {
           </Link>
         </form>
       )}
+    </>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+/** Reached from the reset email: the callback has already exchanged the link for a short-lived session. */
+export function ResetPasswordForm() {
+  const router = useRouter();
+  const status = useSessionStatus();
+  const [values, setValues] = useState({ password: "", confirmPassword: "" });
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  if (status === "loading") return <p className="text-body-sm text-smoke">Checking your reset link…</p>;
+
+  if (status === "anonymous") {
+    return (
+      <div className="space-y-6">
+        <AuthHeading title="link" accent="expired" lead="This reset link is invalid or has already been used." />
+        <ButtonLink href="/forgot-password" size="lg" block>
+          Request a new link
+        </ButtonLink>
+      </div>
+    );
+  }
+
+  const onSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setFormError(null);
+    const parsed = validate(resetPasswordSchema, values);
+    if (!parsed.ok) {
+      setErrors(parsed.errors);
+      return focusFirstError();
+    }
+    setErrors({});
+    setPending(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+    if (error) {
+      setPending(false);
+      return setFormError(authErrorMessage(error));
+    }
+    // Sign out every other device that might know the old password.
+    await supabase.auth.signOut({ scope: "others" });
+    toast.success("Password updated");
+    router.replace("/account");
+    router.refresh();
+  };
+
+  return (
+    <>
+      <AuthHeading title="choose a new" accent="password" lead="Use a strong password you don't use anywhere else." />
+      <form onSubmit={onSubmit} noValidate className="space-y-5">
+        {formError ? <FormMessage>{formError}</FormMessage> : null}
+        <Field label="New password" error={errors.password}>
+          {(p) => <PasswordInput {...p} autoComplete="new-password" maxLength={128} value={values.password} onChange={(e) => setValues({ ...values, password: e.target.value })} />}
+        </Field>
+        <PasswordChecklist value={values.password} />
+        <Field label="Confirm new password" error={errors.confirmPassword}>
+          {(p) => <PasswordInput {...p} autoComplete="new-password" maxLength={128} value={values.confirmPassword} onChange={(e) => setValues({ ...values, confirmPassword: e.target.value })} />}
+        </Field>
+        <Button type="submit" variant="primary" size="lg" block loading={pending}>
+          Update password
+        </Button>
+      </form>
     </>
   );
 }

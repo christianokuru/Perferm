@@ -3,8 +3,7 @@ import type { Metadata } from "next";
 import { Prose } from "@/components/content/prose";
 import { PageIntro } from "@/components/shop/page-intro";
 import { Accent } from "@/components/ui/typography";
-import { siteConfig } from "@/lib/config/site";
-import { deliveryZones } from "@/lib/data/delivery-zones";
+import { getDeliveryZones, getStoreSettings } from "@/lib/catalog/repository";
 import { formatNaira } from "@/lib/money";
 import { pageMetadata } from "@/lib/seo";
 
@@ -14,8 +13,8 @@ export const metadata: Metadata = pageMetadata({
   path: "/delivery",
 });
 
-export default function DeliveryPage() {
-  const zones = [...deliveryZones].sort((a, b) => a.state.localeCompare(b.state));
+export default async function DeliveryPage() {
+  const [zones, settings] = await Promise.all([getDeliveryZones(), getStoreSettings()]);
   return (
     <>
       <PageIntro
@@ -38,8 +37,14 @@ export default function DeliveryPage() {
           </ul>
           <h2>Boutique pickup</h2>
           <p>
-            Choose pickup at checkout and collect from {siteConfig.boutique.street}, {siteConfig.boutique.area}, {siteConfig.boutique.hours}.
-            Bring a valid ID and your order reference.
+            {settings.pickupEnabled ? (
+              <>
+                Choose pickup at checkout and collect from {settings.pickupAddress}, {settings.pickupHours}. Bring a valid ID and your order
+                reference.
+              </>
+            ) : (
+              <>Boutique pickup is temporarily unavailable — every order can still be delivered to you.</>
+            )}
           </p>
           <h2>Packaging</h2>
           <p>Every bottle travels sealed, in our signature box with protective inserts — and every order is fully insured until it reaches you.</p>

@@ -11,8 +11,7 @@ import { Story } from "@/components/home/story";
 import { Testimonials } from "@/components/home/testimonials";
 import { ProductRail } from "@/components/product/product-rail";
 import { Accent } from "@/components/ui/typography";
-import { getCollections, getHomeSelections } from "@/lib/catalog/repository";
-import { reviews } from "@/lib/data/reviews";
+import { getCollections, getHomeSelections, getTestimonials } from "@/lib/catalog/repository";
 import { imagery } from "@/lib/images";
 import { pageMetadata } from "@/lib/seo";
 
@@ -26,7 +25,7 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default async function HomePage() {
-  const [collections, selections] = await Promise.all([getCollections(), getHomeSelections()]);
+  const [collections, selections, testimonials] = await Promise.all([getCollections(), getHomeSelections(), getTestimonials()]);
 
   return (
     <>
@@ -67,12 +66,12 @@ export default async function HomePage() {
       </section>
 
       <div className="py-14 md:py-20">
-        <OudSpotlight product={selections.spotlight} />
+        {selections.spotlight ? <OudSpotlight product={selections.spotlight} /> : null}
       </div>
 
       <StatsAndFamilies />
       <Story />
-      <Testimonials reviews={reviews} />
+      {testimonials.length ? <Testimonials reviews={testimonials} /> : null}
       <NewsletterBand />
     </>
   );

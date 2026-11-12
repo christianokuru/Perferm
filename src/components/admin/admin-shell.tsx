@@ -2,23 +2,33 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { Suspense, useState, type ReactNode } from "react";
 
-import { AuthGuard } from "@/components/auth/auth-guard";
-import { ArrowUpRightIcon, BoxIcon, CloseIcon, GridIcon, MenuIcon, ReceiptIcon, SettingsIcon, TruckIcon, UsersIcon } from "@/components/icons";
+import {
+  ArrowUpRightIcon,
+  BoxIcon,
+  CloseIcon,
+  GridIcon,
+  MailIcon,
+  MenuIcon,
+  ReceiptIcon,
+  SettingsIcon,
+  StarIcon,
+  TruckIcon,
+  UsersIcon,
+} from "@/components/icons";
 import { Logo } from "@/components/layout/logo";
-import { PageSkeleton } from "@/components/providers/hydration-gate";
 import { IconButton } from "@/components/ui/icon-button";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { useAdminStore } from "@/stores/admin-store";
-import { useHydrated } from "@/stores/storage";
 
 const nav = [
   { href: "/admin", label: "Dashboard", icon: GridIcon },
   { href: "/admin/products", label: "Products", icon: BoxIcon },
   { href: "/admin/orders", label: "Orders", icon: ReceiptIcon },
   { href: "/admin/customers", label: "Customers", icon: UsersIcon },
+  { href: "/admin/reviews", label: "Reviews", icon: StarIcon },
+  { href: "/admin/messages", label: "Messages", icon: MailIcon },
   { href: "/admin/delivery", label: "Delivery", icon: TruckIcon },
   { href: "/admin/settings", label: "Settings", icon: SettingsIcon },
 ];
@@ -50,17 +60,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-/** Admin chrome: sidebar on desktop, top bar + sheet on mobile. Admin-only. */
+/** Admin chrome: sidebar on desktop, top bar + sheet on mobile. Access is enforced on the server. */
 export function AdminShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const ready = useHydrated(useAdminStore);
-
-  useEffect(() => {
-    void useAdminStore.persist.rehydrate();
-  }, []);
 
   return (
-    <AuthGuard role="admin">
+    <>
       <div className="min-h-dvh bg-pearl lg:grid lg:grid-cols-[16rem_1fr]">
         <aside className="hidden flex-col border-r border-mist p-5 lg:sticky lg:top-0 lg:flex lg:h-dvh">
           <Logo className="self-start" />
@@ -84,16 +89,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
               <Logo />
             </div>
             <span className="hidden text-caption text-smoke lg:block">Perferm · Store management</span>
-            <span className="rounded-[30px] bg-saffron/15 px-3 py-1 text-[11px] font-medium text-ink" title="Data is saved in this browser until Supabase is connected">
-              Demo mode
-            </span>
+            <Link href="/account" className="text-caption text-smoke hover:text-ink">
+              My account
+            </Link>
           </header>
           <main id="main" className="px-4 py-8 lg:px-8 lg:py-10">
-            <p className="mb-8 rounded-[var(--radius-card)] border border-saffron/30 bg-saffron/5 px-4 py-3 text-caption text-graphite">
-              <strong className="font-medium text-ink">Demo mode.</strong> Changes here are saved in this browser so every screen is usable.
-              Once Supabase is connected they&apos;ll go live on the storefront and checkout, which always prices orders on the server.
-            </p>
-            {ready ? children : <PageSkeleton />}
+            {children}
           </main>
         </div>
       </div>
@@ -116,7 +117,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           </Link>
         </div>
       </Sheet>
-    </AuthGuard>
+    </>
   );
 }
 

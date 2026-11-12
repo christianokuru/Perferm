@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Instrument_Serif, Onest } from "next/font/google";
 
 import { ServiceWorkerRegister } from "@/components/pwa/service-worker-register";
+import { SessionSync } from "@/components/providers/session-sync";
 import { SmoothScroll } from "@/components/providers/smooth-scroll";
 import { StoreHydration } from "@/components/providers/store-hydration";
 import { Toaster } from "@/components/ui/toast";
@@ -78,6 +79,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {children}
         <Toaster />
         <StoreHydration />
+        <SessionSync />
         <SmoothScroll />
         <ServiceWorkerRegister />
       </body>
