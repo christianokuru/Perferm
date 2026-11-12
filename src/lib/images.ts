@@ -6,6 +6,28 @@ export function pexels(id: number, width = 1600): string {
   return `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=compress&cs=tinysrgb&w=${width}`;
 }
 
+/**
+ * Asks the image CDN for a server-side crop that matches the frame it will
+ * fill. Without it, a landscape photo in a portrait frame is scaled up by
+ * `object-cover` and looks soft on high-density phones. Sources without a
+ * crop API (e.g. our own Storage uploads) are returned unchanged.
+ */
+export function cropTo(src: string, width: number, height: number): string {
+  try {
+    const url = new URL(src);
+    if (url.hostname !== "images.pexels.com") return src;
+    url.searchParams.set("fit", "crop");
+    url.searchParams.set("w", String(width));
+    url.searchParams.set("h", String(height));
+    return url.toString();
+  } catch {
+    return src;
+  }
+}
+
+/** 4:5 portrait crop — the shape of every product and collection frame. */
+export const portrait = (src: string, width = 1400) => cropTo(src, width, Math.round(width * 1.25));
+
 export const imagery = {
   heroModel: pexels(3774940, 2000),
   heroProduct: pexels(37127787, 1800),

@@ -2,9 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { ArrowUpRightIcon } from "@/components/icons";
+import { ArtDirectedImage } from "@/components/ui/art-directed-image";
 import { ButtonLink } from "@/components/ui/button";
 import { Accent } from "@/components/ui/typography";
-import { imagery } from "@/lib/images";
+import { cropTo, imagery } from "@/lib/images";
 
 /**
  * Split editorial hero. Mobile: a single tall portrait with the headline
@@ -15,15 +16,13 @@ export function Hero() {
     <section aria-labelledby="hero-title" className="px-2 pt-2 md:px-4">
       <div className="relative mx-auto grid grid-cols-1 max-w-[100rem] gap-2 md:grid-cols-[1.35fr_1fr]">
         <div className="relative h-[calc(100svh-7.5rem)] min-h-[34rem] overflow-hidden rounded-[var(--radius-image)] bg-pearl md:h-[min(52rem,calc(100svh-7rem))]">
-          <Image
-            src={imagery.heroModel}
+          <ArtDirectedImage
             alt="A woman in a vintage blue dress applying perfume to her neck"
-            fill
-            preload
-            loading="eager"
-            fetchPriority="high"
-            sizes="(min-width: 768px) 58vw, 100vw"
-            className="object-cover object-[50%_20%]"
+            mobileSrc={cropTo(imagery.heroModel, 1200, 2300)}
+            desktopSrc={imagery.heroModel}
+            desktopSizes="58vw"
+            priority
+            className="object-[50%_20%] max-md:object-center"
           />
           <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-ink/75 via-ink/15 to-transparent" />
 

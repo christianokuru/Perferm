@@ -1,11 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { ArtDirectedImage } from "@/components/ui/art-directed-image";
 import { ButtonLink } from "@/components/ui/button";
 import { Price } from "@/components/ui/misc";
 import { Accent, Eyebrow } from "@/components/ui/typography";
 import type { ProductSummary } from "@/lib/catalog/summary";
-import { imagery } from "@/lib/images";
+import { imagery, portrait } from "@/lib/images";
 
 /** The one dark section on the page — Inkwell surface for the oud story. */
 export function OudSpotlight({ product }: { product: ProductSummary }) {
@@ -13,19 +14,18 @@ export function OudSpotlight({ product }: { product: ProductSummary }) {
     <section aria-labelledby="oud-title" className="px-2 md:px-4">
       <div className="mx-auto grid grid-cols-1 max-w-[100rem] overflow-hidden rounded-[var(--radius-image)] bg-ink text-white md:grid-cols-2">
         <div className="relative aspect-[4/5] md:aspect-auto md:min-h-[44rem]">
-          <Image
-            src={imagery.smoke}
+          <ArtDirectedImage
             alt="Ribbons of incense smoke curling through darkness"
-            fill
-            sizes="(min-width: 768px) 50vw, 100vw"
-            className="object-cover"
+            mobileSrc={portrait(imagery.smoke)}
+            desktopSrc={imagery.smoke}
+            desktopSizes="50vw"
           />
           <Link
             href={`/product/${product.slug}`}
             className="group absolute right-4 bottom-4 left-4 flex items-center gap-4 rounded-[var(--radius-card)] bg-white p-3 text-ink md:right-auto md:bottom-8 md:left-8 md:w-80"
           >
             <span className="relative size-20 shrink-0 overflow-hidden rounded-[10px] bg-pearl">
-              <Image src={product.image.src} alt="" fill sizes="80px" className="object-cover" />
+              <Image src={portrait(product.image.src, 400)} alt="" fill sizes="80px" className="object-cover" />
             </span>
             <span className="min-w-0">
               <span className="block text-caption text-smoke">{product.house}</span>

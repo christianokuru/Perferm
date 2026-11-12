@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useRef, useState } from "react";
 
+import { portrait } from "@/lib/images";
 import type { ProductImage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -44,7 +45,7 @@ export function ProductGallery({ images, name }: { images: ProductImage[]; name:
               aria-label={`${i + 1} of ${images.length}`}
             >
               <Image
-                src={image.src}
+                src={portrait(image.src, 1600)}
                 alt={image.alt}
                 fill
                 sizes="100vw"
@@ -76,7 +77,7 @@ export function ProductGallery({ images, name }: { images: ProductImage[]; name:
         {images.map((image, i) => (
           <div key={image.src} className="relative aspect-[4/5] overflow-hidden rounded-[var(--radius-image)] bg-pearl">
             <Image
-              src={image.src}
+              src={portrait(image.src, 1600)}
               alt={image.alt}
               fill
               sizes="(min-width: 1280px) 720px, 55vw"

@@ -244,6 +244,7 @@ export function ProductForm({ product, collections }: { product?: Product; colle
               </ul>
             ) : null}
             {err("images") ? <p className="text-caption text-danger">{err("images")}</p> : null}
+            <p className="text-caption text-smoke">Portrait (4:5) photos at least 1200 × 1500 px stay sharp on every phone. The first image is the cover.</p>
             <label className="flex h-12 cursor-pointer items-center justify-center rounded-full border border-dashed border-graphite/40 text-body-sm text-ink hover:border-ink">
               {uploading ? "Uploading…" : "Upload image"}
               <input type="file" accept="image/png,image/jpeg,image/webp,image/avif" onChange={onUpload} disabled={uploading} className="sr-only" />

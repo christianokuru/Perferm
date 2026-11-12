@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Badge, Price } from "@/components/ui/misc";
 import { concentrationLabels } from "@/lib/catalog/labels";
 import type { ProductSummary } from "@/lib/catalog/summary";
+import { portrait } from "@/lib/images";
 import { cn } from "@/lib/utils";
 
 import { QuickAddButton } from "./quick-add-button";
@@ -33,7 +34,7 @@ export function ProductCard({
       <div className="relative aspect-[4/5] overflow-hidden rounded-[var(--radius-image)] bg-pearl">
         <Link href={href} aria-label={`${product.name} by ${product.house}`} className="absolute inset-0 z-[1]" />
         <Image
-          src={product.image.src}
+          src={portrait(product.image.src)}
           alt={product.image.alt}
           fill
           sizes={sizes}
@@ -46,7 +47,7 @@ export function ProductCard({
         />
         {product.hoverImage ? (
           <Image
-            src={product.hoverImage.src}
+            src={portrait(product.hoverImage.src)}
             alt=""
             fill
             sizes={sizes}

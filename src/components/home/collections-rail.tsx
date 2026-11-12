@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { ArrowRightIcon, GiftIcon, ShieldIcon, TruckIcon } from "@/components/icons";
 import { Accent } from "@/components/ui/typography";
+import { portrait } from "@/lib/images";
 import type { Collection } from "@/lib/types";
 
 const trust = [
@@ -40,7 +41,7 @@ export function CollectionsRail({ collections }: { collections: Collection[] }) 
               className="group relative block aspect-[4/5] overflow-hidden rounded-[var(--radius-image)] bg-pearl"
             >
               <Image
-                src={collection.image.src}
+                src={portrait(collection.image.src)}
                 alt={collection.image.alt}
                 fill
                 sizes="(min-width: 1024px) 31vw, (min-width: 640px) 46vw, 78vw"
