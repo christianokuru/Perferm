@@ -1,0 +1,45 @@
+import { naira } from "@/lib/money";
+import type { DeliveryZone } from "@/lib/types";
+
+/** Delivery fee per Nigerian state (+ FCT). Editable from the admin dashboard. */
+export const deliveryZones: DeliveryZone[] = [
+  { state: "Lagos", fee: naira(3_500), eta: "Same or next day" },
+  { state: "Ogun", fee: naira(5_000), eta: "1–2 working days" },
+  { state: "Oyo", fee: naira(6_000), eta: "2–3 working days" },
+  { state: "Osun", fee: naira(6_500), eta: "2–3 working days" },
+  { state: "Ondo", fee: naira(6_500), eta: "2–3 working days" },
+  { state: "Ekiti", fee: naira(7_000), eta: "2–4 working days" },
+  { state: "FCT", fee: naira(6_000), eta: "1–2 working days" },
+  { state: "Rivers", fee: naira(6_500), eta: "2–3 working days" },
+  { state: "Delta", fee: naira(6_500), eta: "2–3 working days" },
+  { state: "Edo", fee: naira(6_500), eta: "2–3 working days" },
+  { state: "Anambra", fee: naira(7_000), eta: "2–3 working days" },
+  { state: "Enugu", fee: naira(7_000), eta: "2–3 working days" },
+  { state: "Imo", fee: naira(7_000), eta: "2–4 working days" },
+  { state: "Abia", fee: naira(7_000), eta: "2–4 working days" },
+  { state: "Ebonyi", fee: naira(7_500), eta: "3–4 working days" },
+  { state: "Akwa Ibom", fee: naira(7_500), eta: "3–4 working days" },
+  { state: "Cross River", fee: naira(7_500), eta: "3–4 working days" },
+  { state: "Bayelsa", fee: naira(7_500), eta: "3–4 working days" },
+  { state: "Kwara", fee: naira(7_000), eta: "2–4 working days" },
+  { state: "Kogi", fee: naira(7_000), eta: "2–4 working days" },
+  { state: "Niger", fee: naira(7_500), eta: "3–4 working days" },
+  { state: "Nasarawa", fee: naira(7_000), eta: "2–4 working days" },
+  { state: "Benue", fee: naira(7_500), eta: "3–4 working days" },
+  { state: "Plateau", fee: naira(7_500), eta: "3–4 working days" },
+  { state: "Kaduna", fee: naira(7_500), eta: "2–4 working days" },
+  { state: "Kano", fee: naira(7_500), eta: "2–4 working days" },
+  { state: "Katsina", fee: naira(8_500), eta: "3–5 working days" },
+  { state: "Jigawa", fee: naira(8_500), eta: "3–5 working days" },
+  { state: "Bauchi", fee: naira(8_500), eta: "3–5 working days" },
+  { state: "Gombe", fee: naira(8_500), eta: "3–5 working days" },
+  { state: "Adamawa", fee: naira(9_000), eta: "4–6 working days" },
+  { state: "Taraba", fee: naira(9_000), eta: "4–6 working days" },
+  { state: "Borno", fee: naira(9_500), eta: "4–6 working days" },
+  { state: "Yobe", fee: naira(9_500), eta: "4–6 working days" },
+  { state: "Sokoto", fee: naira(9_000), eta: "4–6 working days" },
+  { state: "Kebbi", fee: naira(9_000), eta: "4–6 working days" },
+  { state: "Zamfara", fee: naira(9_000), eta: "4–6 working days" },
+];
+
+export const nigerianStates = deliveryZones.map((zone) => zone.state).sort((a, b) => a.localeCompare(b));
