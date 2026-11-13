@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 
 import { CheckIcon } from "@/components/icons";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Checkbox, Field, FormMessage, Input, PasswordInput } from "@/components/ui/form";
 import { toast } from "@/components/ui/toast";
 import { Accent } from "@/components/ui/typography";
-import { authErrorMessage, isEmailNotConfirmed } from "@/lib/auth/errors";
+import { authErrorMessage } from "@/lib/auth/errors";
 import { publicEnv } from "@/lib/config/public-env";
 import { focusFirstError } from "@/lib/focus";
 import { createClient } from "@/lib/supabase/client";
@@ -45,36 +45,9 @@ function useNextPath() {
   return safeRedirectPath(useSearchParams().get("next"));
 }
 
-/** Where Supabase sends people back to after an email link or OAuth. Must be in the project's redirect allow-list. */
+/** Where Supabase sends people back to after a password-reset link or OAuth. Must be in the project's redirect allow-list. */
 function callbackUrl(next: string) {
   return `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
-}
-
-/** Resend button with a cooldown, so the confirmation email can't be spammed. */
-function ResendConfirmation({ email, next }: { email: string; next: string }) {
-  const [cooldown, setCooldown] = useState(0);
-  const [pending, setPending] = useState(false);
-
-  useEffect(() => {
-    if (!cooldown) return;
-    const timer = setTimeout(() => setCooldown((c) => c - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [cooldown]);
-
-  const resend = async () => {
-    setPending(true);
-    const { error } = await createClient().auth.resend({ type: "signup", email, options: { emailRedirectTo: callbackUrl(next) } });
-    setPending(false);
-    if (error) return toast.error(authErrorMessage(error));
-    toast.success("A new confirmation link is on its way");
-    setCooldown(60);
-  };
-
-  return (
-    <Button variant="outline" onClick={resend} loading={pending} disabled={cooldown > 0} block>
-      {cooldown ? `Resend available in ${cooldown}s` : "Resend confirmation email"}
-    </Button>
-  );
 }
 
 function Divider() {
@@ -120,13 +93,11 @@ export function LoginForm() {
   const [values, setValues] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(params.get("error") === "link" ? "That link is invalid or has expired. Please try again." : null);
-  const [unconfirmed, setUnconfirmed] = useState(false);
   const [pending, setPending] = useState(false);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setFormError(null);
-    setUnconfirmed(false);
     const parsed = validate(loginSchema, values);
     if (!parsed.ok) {
       setErrors(parsed.errors);
@@ -137,7 +108,6 @@ export function LoginForm() {
     const { error } = await createClient().auth.signInWithPassword(parsed.data);
     if (error) {
       setPending(false);
-      setUnconfirmed(isEmailNotConfirmed(error));
       return setFormError(authErrorMessage(error));
     }
     toast.success("Welcome back");
@@ -161,11 +131,6 @@ export function LoginForm() {
           </>
         }
       />
-      {params.get("confirmed") === "1" ? (
-        <div className="mb-5">
-          <FormMessage tone="success">Your email is confirmed. Sign in to continue.</FormMessage>
-        </div>
-      ) : null}
       {params.get("reset") === "1" ? (
         <div className="mb-5">
           <FormMessage tone="success">Your password was updated. Sign in with your new password.</FormMessage>
@@ -173,7 +138,6 @@ export function LoginForm() {
       ) : null}
       <form onSubmit={onSubmit} noValidate className="space-y-5">
         {formError ? <FormMessage>{formError}</FormMessage> : null}
-        {unconfirmed ? <ResendConfirmation email={values.email.trim().toLowerCase()} next={next} /> : null}
         <Field label="Email" error={errors.email}>
           {(p) => <Input {...p} type="email" autoComplete="email" inputMode="email" maxLength={254} value={values.email} onChange={(e) => setValues({ ...values, email: e.target.value })} />}
         </Field>
@@ -219,22 +183,6 @@ function PasswordChecklist({ value }: { value: string }) {
   );
 }
 
-function CheckEmailPanel({ email, next }: { email: string; next: string }) {
-  return (
-    <div className="space-y-6">
-      <AuthHeading title="check your" accent="inbox" lead="One last step to secure your account." />
-      <FormMessage tone="success">
-        We&apos;ve sent a confirmation link to {email}. Open it on this device to activate your account — it expires in 24 hours.
-      </FormMessage>
-      <p className="text-body-sm text-smoke">Can&apos;t find it? Check your spam or promotions folder.</p>
-      <ResendConfirmation email={email} next={next} />
-      <Link href="/login" className="block text-center text-body-sm text-ink underline underline-offset-4">
-        Back to sign in
-      </Link>
-    </div>
-  );
-}
-
 export function RegisterForm() {
   const router = useRouter();
   const next = useNextPath();
@@ -243,7 +191,6 @@ export function RegisterForm() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [sentTo, setSentTo] = useState<string | null>(null);
 
   const set = <K extends keyof typeof values>(key: K, value: (typeof values)[K]) => setValues((v) => ({ ...v, [key]: value }));
 
@@ -258,25 +205,24 @@ export function RegisterForm() {
     setErrors({});
     setPending(true);
     const { name, email, phone, password } = parsed.data;
-    const { data, error } = await createClient().auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: name, phone }, emailRedirectTo: callbackUrl(next) },
-    });
-    setPending(false);
-    if (error) return setFormError(authErrorMessage(error));
-
-    if (data.session) {
-      toast.success(`Welcome to Perferm, ${name.split(" ")[0]}`);
-      router.replace(next);
-      router.refresh();
+    // Accounts are active immediately (no confirmation email), so sign-up returns a session.
+    const { data, error } = await createClient().auth.signUp({ email, password, options: { data: { full_name: name, phone } } });
+    if (error) {
+      setPending(false);
+      return setFormError(authErrorMessage(error));
+    }
+    if (!data.session) {
+      // Only if the project still requires email confirmation: the account exists, so send them to sign in.
+      setPending(false);
+      toast.success("Your account is ready. Please sign in.");
+      router.replace(`/login${next !== "/account" ? `?next=${encodeURIComponent(next)}` : ""}`);
       return;
     }
-    // Same screen whether the email is new or already registered — no account enumeration.
-    setSentTo(email);
+    toast.success(`Welcome to Perferm, ${name.split(" ")[0]}`);
+    router.replace(next);
+    router.refresh();
   };
 
-  if (sentTo) return <CheckEmailPanel email={sentTo} next={next} />;
   if (viewer && !pending) return <SignedInNotice name={viewer.name} next={next} />;
 
   return (

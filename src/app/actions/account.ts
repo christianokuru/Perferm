@@ -12,7 +12,7 @@ import { clientKey, rateLimit } from "@/lib/security/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { validate, type FieldErrors } from "@/lib/validation/fields";
-import { addressSchema, changePasswordSchema, deleteAccountSchema, profileSchema } from "@/lib/validation/schemas";
+import { addressSchema, changeEmailSchema, changePasswordSchema, deleteAccountSchema, profileSchema } from "@/lib/validation/schemas";
 
 export type ActionResult = { ok: true } | { ok: false; error?: string; fieldErrors?: FieldErrors };
 
@@ -113,6 +113,33 @@ export async function changePassword(input: unknown): Promise<ActionResult> {
     if (error) return { ok: false, error: authErrorMessage(error) };
     // Other devices that knew the old password are signed out.
     await supabase.auth.signOut({ scope: "others" });
+    return { ok: true };
+  });
+}
+
+/**
+ * Changes the sign-in email at once, with no confirmation emails (the store
+ * doesn't send auth emails). Because no inbox check happens, the current
+ * password is required, so a stolen session alone can't take the account.
+ */
+export async function changeEmail(input: unknown): Promise<ActionResult> {
+  return withViewer("email", 5, async (viewer) => {
+    const parsed = validate(changeEmailSchema, input);
+    if (!parsed.ok) return { ok: false, fieldErrors: parsed.errors };
+    const { email, password } = parsed.data;
+    if (email === viewer.email.toLowerCase()) return { ok: false, fieldErrors: { email: "That's already your email address." } };
+    if (viewer.hasPassword && !(await passwordMatches(viewer.email, password ?? ""))) {
+      return { ok: false, fieldErrors: { password: "Your password is incorrect." } };
+    }
+
+    const { error } = await createAdminClient().auth.admin.updateUserById(viewer.id, { email, email_confirm: true });
+    if (error) {
+      if (error.code === "email_exists" || /already (been )?registered|already exists/i.test(error.message)) {
+        return { ok: false, fieldErrors: { email: "Another account already uses this email." } };
+      }
+      return { ok: false, error: authErrorMessage(error) };
+    }
+    revalidatePath("/account", "layout");
     return { ok: true };
   });
 }

@@ -39,7 +39,11 @@ export const resetPasswordSchema = z
   .object({ password: passwordField, confirmPassword: z.string() })
   .refine((d) => d.password === d.confirmPassword, { message: "Passwords do not match", path: ["confirmPassword"] });
 
-export const changeEmailSchema = z.object({ email: emailField });
+export const changeEmailSchema = z.object({
+  email: emailField,
+  /** Current password; required (checked on the server) for accounts that have one. */
+  password: z.string().max(128).optional(),
+});
 
 export const deleteAccountSchema = z.object({
   password: z.string().max(128).optional(),

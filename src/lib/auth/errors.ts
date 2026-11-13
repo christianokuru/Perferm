@@ -10,8 +10,8 @@ export function authErrorMessage(error: { code?: string; message?: string; statu
   if (code === "invalid_credentials" || message.includes("invalid login credentials")) {
     return "That email and password combination doesn't match our records.";
   }
-  if (code === "email_not_confirmed" || message.includes("email not confirmed")) {
-    return "Please confirm your email first — we've sent you a link.";
+  if (code === "user_already_exists" || code === "email_exists" || message.includes("already registered")) {
+    return "An account with this email already exists. Sign in instead, or reset your password.";
   }
   if (code === "over_request_rate_limit" || code === "over_email_send_rate_limit" || error.status === 429) {
     return "Too many attempts. Please wait a few minutes and try again.";
@@ -28,6 +28,3 @@ export function authErrorMessage(error: { code?: string; message?: string; statu
   return "Something went wrong. Please try again.";
 }
 
-export function isEmailNotConfirmed(error: { code?: string; message?: string } | null | undefined): boolean {
-  return error?.code === "email_not_confirmed" || (error?.message ?? "").toLowerCase().includes("email not confirmed");
-}

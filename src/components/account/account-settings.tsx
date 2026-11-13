@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 
-import { changePassword, deleteAccount, updateProfile } from "@/app/actions/account";
+import { changeEmail, changePassword, deleteAccount, updateProfile } from "@/app/actions/account";
 import { Button } from "@/components/ui/button";
 import { Field, FormMessage, Input, PasswordInput } from "@/components/ui/form";
 import { toast } from "@/components/ui/toast";
@@ -78,40 +78,53 @@ function ProfileForm({ profile }: { profile: SettingsProfile }) {
 }
 
 function EmailForm({ profile }: { profile: SettingsProfile }) {
-  const [email, setEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [sentTo, setSentTo] = useState<string | null>(null);
+  const router = useRouter();
+  const [values, setValues] = useState({ email: "", password: "" });
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    const parsed = validate(changeEmailSchema, { email });
-    if (!parsed.ok) return setError(parsed.errors.email);
-    if (parsed.data.email === profile.email.toLowerCase()) return setError("That's already your email address.");
-    setError(null);
+    setFormError(null);
+    const parsed = validate(changeEmailSchema, values);
+    if (!parsed.ok) {
+      setErrors(parsed.errors);
+      return focusFirstError();
+    }
+    if (parsed.data.email === profile.email.toLowerCase()) return setErrors({ email: "That's already your email address." });
+    if (profile.hasPassword && !values.password) return setErrors({ password: "Enter your current password" });
+    setErrors({});
     setPending(true);
-    const { error: authError } = await createClient().auth.updateUser(
-      { email: parsed.data.email },
-      { emailRedirectTo: `${window.location.origin}/auth/callback?next=/account/settings` },
-    );
+    const result = await changeEmail(values);
+    if (!result.ok) {
+      setPending(false);
+      setErrors(result.fieldErrors ?? {});
+      if (result.error) setFormError(result.error);
+      return focusFirstError();
+    }
+    // Pick up the new email in this device's session token.
+    await createClient().auth.refreshSession();
     setPending(false);
-    if (authError) return setError(authErrorMessage(authError));
-    setSentTo(parsed.data.email);
-    setEmail("");
+    useSessionStore.getState().patchUser({ email: parsed.data.email });
+    setValues({ email: "", password: "" });
+    toast.success("Email updated. Use it next time you sign in.");
+    router.refresh();
   };
 
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-5">
+      {formError ? <FormMessage>{formError}</FormMessage> : null}
       <Field label="Current email">{(p) => <Input {...p} value={profile.email} disabled readOnly />}</Field>
-      {sentTo ? (
-        <FormMessage tone="success">
-          Check {sentTo} (and your current inbox) for a confirmation link. Your sign-in email changes once it&apos;s confirmed.
-        </FormMessage>
-      ) : null}
-      <Field label="New email" error={error ?? undefined}>
-        {(p) => <Input {...p} type="email" autoComplete="email" inputMode="email" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} />}
+      <Field label="New email" error={errors.email}>
+        {(p) => <Input {...p} type="email" autoComplete="email" inputMode="email" maxLength={254} value={values.email} onChange={(e) => setValues({ ...values, email: e.target.value })} />}
       </Field>
-      <Button type="submit" variant="outline" loading={pending} disabled={!email}>
+      {profile.hasPassword ? (
+        <Field label="Current password" error={errors.password}>
+          {(p) => <PasswordInput {...p} autoComplete="current-password" maxLength={128} value={values.password} onChange={(e) => setValues({ ...values, password: e.target.value })} />}
+        </Field>
+      ) : null}
+      <Button type="submit" variant="outline" loading={pending} disabled={!values.email}>
         Change email
       </Button>
     </form>

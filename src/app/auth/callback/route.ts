@@ -4,8 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { safeRedirectPath } from "@/lib/utils";
 
 /**
- * Landing point for email links (sign-up confirmation, password reset, email
- * change) and OAuth. Exchanges the one-time PKCE code for a session cookie,
+ * Landing point for password-reset links and OAuth. Exchanges the one-time PKCE code for a session cookie,
  * then sends the visitor on to a same-origin path only (no open redirects).
  */
 export async function GET(request: NextRequest) {
@@ -23,9 +22,8 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
-    // The email is already verified by Supabase before redirecting here; the exchange only fails
-    // when the link is opened in a different browser. Ask them to sign in instead.
-    return redirectTo(next === "/reset-password" ? "/reset-password" : "/login?confirmed=1");
+    // The exchange fails when the link is opened in a different browser or was already used.
+    return redirectTo(next === "/reset-password" ? "/reset-password" : "/login?error=link");
   }
   return redirectTo(next);
 }

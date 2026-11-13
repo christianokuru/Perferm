@@ -32,7 +32,7 @@ After that, admins can promote others from **Admin → Customers**.
 | --- | --- |
 | Storefront | `/`, `/shop` (search, filters and sort, all held in the URL), `/collections/[slug]`, `/product/[slug]` (verified-purchase reviews) |
 | Commerce | Bag drawer and `/cart`, `/checkout` (state-based delivery or free pickup, Paystack / Flutterwave), `/checkout/success`, `/track` (guest order tracking), `/wishlist` (synced to the account) |
-| Accounts | `/login`, `/register` (email confirmation), `/forgot-password`, `/reset-password`, `/auth/callback`, `/auth/confirm`, `/account` (overview, orders with history, addresses, profile, email, password, sign out everywhere, delete account) |
+| Accounts | `/login`, `/register` (active immediately, no confirmation email), `/forgot-password`, `/reset-password`, `/auth/callback`, `/auth/confirm`, `/account` (overview, orders with history, addresses, profile, email, password, sign out everywhere, delete account) |
 | Admin | `/admin` dashboard (revenue, 14-day chart, alerts, low stock, best sellers), products (create/edit/archive, Storage uploads), orders (search, filters, status workflow, internal notes), customers (search, roles), reviews (moderation), messages + newsletter CSV export, delivery fees per state, store settings |
 | Webhooks | `/api/webhooks/paystack`, `/api/webhooks/flutterwave` |
 | SEO and PWA | Per-page metadata and canonicals, Product / Breadcrumb / FAQ / Organization / WebSite JSON-LD, sitemap, robots, OG image, manifest, offline-capable service worker |
