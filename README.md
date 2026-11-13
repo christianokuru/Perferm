@@ -75,3 +75,26 @@ See `.env.example`. Secrets (`SUPABASE_SECRET_KEY`, `PAYSTACK_SECRET_KEY`, `FLUT
 ## Checks
 
 `npm run lint` and `npm run build` must pass with zero warnings. After schema changes, run the Supabase security advisor.
+
+## Tests
+
+```bash
+npm test            # unit tests (Vitest): redirects, auth errors, validation, money, filters (~1s)
+npm run test:e2e    # browser journeys (Playwright) against a production build on :3001
+npm run test:all    # both
+```
+
+One-time setup for the browser tests: `npx playwright install chromium`.
+
+- **Visitor journeys** (`tests/e2e/public.spec.ts`) write nothing. They run on desktop and mobile.
+- **Customer journey** (`customer.spec.ts`) signs up a temporary `e2e.…@example.com` account, then signs in, changes its email and deletes it. If a step fails, it still deletes the account.
+- **Admin journeys** (`admin.spec.ts`) are read-only. They need a real admin login in `.env.test.local`, which is gitignored:
+
+  ```bash
+  E2E_ADMIN_EMAIL=you@example.com
+  E2E_ADMIN_PASSWORD=your-password
+  ```
+
+  Without it they are skipped.
+
+Set `E2E_BASE_URL` to test another deployment instead of the local build. A failed run saves a screenshot and a step-by-step trace: run `npx playwright show-report`.

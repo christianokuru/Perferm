@@ -272,10 +272,11 @@ function DangerZone({ hasPassword }: { hasPassword: boolean }) {
   );
 }
 
-export function AccountSettings({ profile }: { profile: SettingsProfile }) {
+/** Profile, email, password, sessions and deletion. Used by the customer account and the admin's own profile page. */
+export function AccountSettings({ profile, heading }: { profile: SettingsProfile; heading?: ReactNode }) {
   return (
     <>
-      <AccountHeading title="account" accent="settings" />
+      {heading ?? <AccountHeading title="account" accent="settings" />}
       <Panel title="Profile" description="How we address you and reach you about orders.">
         <ProfileForm key={profile.id} profile={profile} />
       </Panel>

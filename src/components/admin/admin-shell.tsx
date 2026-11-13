@@ -9,14 +9,17 @@ import {
   BoxIcon,
   CloseIcon,
   GridIcon,
+  LogoutIcon,
   MailIcon,
   MenuIcon,
   ReceiptIcon,
   SettingsIcon,
   StarIcon,
   TruckIcon,
+  UserIcon,
   UsersIcon,
 } from "@/components/icons";
+import { useSignOut } from "@/components/auth/use-sign-out";
 import { AreaBreadcrumbs } from "@/components/layout/area-breadcrumbs";
 import { Logo } from "@/components/layout/logo";
 import { IconButton } from "@/components/ui/icon-button";
@@ -61,9 +64,38 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+/** Profile, storefront and sign-out links shown under the main admin navigation. */
+function AccountLinks({ onNavigate }: { onNavigate?: () => void }) {
+  const signOut = useSignOut();
+  const item = "flex h-11 w-full items-center gap-3 rounded-full px-4 text-body-sm text-smoke transition-colors hover:bg-white hover:text-ink";
+  return (
+    <ul className="space-y-1 border-t border-mist pt-4">
+      <li>
+        <Link href="/admin/profile" onClick={onNavigate} className={item}>
+          <UserIcon size={18} />
+          Your profile
+        </Link>
+      </li>
+      <li>
+        <Link href="/" onClick={onNavigate} className={item}>
+          <ArrowUpRightIcon size={18} />
+          View storefront
+        </Link>
+      </li>
+      <li>
+        <button type="button" onClick={signOut} className={item}>
+          <LogoutIcon size={18} />
+          Sign out
+        </button>
+      </li>
+    </ul>
+  );
+}
+
 /** Admin chrome: sidebar on desktop, top bar + sheet on mobile. Access is enforced on the server. */
 export function AdminShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const signOut = useSignOut();
 
   return (
     <>
@@ -76,9 +108,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
               <NavLinks />
             </Suspense>
           </nav>
-          <Link href="/" className="flex items-center gap-2 text-body-sm text-smoke hover:text-ink">
-            View storefront <ArrowUpRightIcon size={14} />
-          </Link>
+          <AccountLinks />
         </aside>
 
         <div className="min-w-0">
@@ -90,9 +120,15 @@ export function AdminShell({ children }: { children: ReactNode }) {
               <Logo />
             </div>
             <span className="hidden text-caption text-smoke lg:block">Perferm · Store management</span>
-            <Link href="/account" className="text-caption text-smoke hover:text-ink">
-              My account
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link href="/admin/profile" className="hidden text-caption text-smoke hover:text-ink sm:block">
+                Your profile
+              </Link>
+              <button type="button" onClick={signOut} className="flex items-center gap-1.5 text-caption text-smoke hover:text-ink">
+                <LogoutIcon size={14} />
+                Sign out
+              </button>
+            </div>
           </header>
           <main id="main" className="px-4 py-8 lg:px-8 lg:py-10">
             <Suspense>
@@ -116,9 +152,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
               <NavLinks onNavigate={() => setMenuOpen(false)} />
             </Suspense>
           </nav>
-          <Link href="/" className="text-body-sm text-smoke">
-            View storefront →
-          </Link>
+          <AccountLinks onNavigate={() => setMenuOpen(false)} />
         </div>
       </Sheet>
     </>

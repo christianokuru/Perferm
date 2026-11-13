@@ -10,6 +10,7 @@ import { Checkbox, Field, FormMessage, Input, PasswordInput } from "@/components
 import { toast } from "@/components/ui/toast";
 import { Accent } from "@/components/ui/typography";
 import { authErrorMessage } from "@/lib/auth/errors";
+import { postSignInPath } from "@/lib/auth/redirect";
 import { publicEnv } from "@/lib/config/public-env";
 import { focusFirstError } from "@/lib/focus";
 import { createClient } from "@/lib/supabase/client";
@@ -43,6 +44,12 @@ function SignedInNotice({ name, next }: { name: string; next: string }) {
 
 function useNextPath() {
   return safeRedirectPath(useSearchParams().get("next"));
+}
+
+/** The signed-in user's role, read with their own session (RLS: own profile only). */
+async function roleOf(supabase: ReturnType<typeof createClient>, userId: string) {
+  const { data } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
+  return data?.role;
 }
 
 /** Where Supabase sends people back to after a password-reset link or OAuth. Must be in the project's redirect allow-list. */
@@ -89,6 +96,7 @@ export function LoginForm() {
   const router = useRouter();
   const next = useNextPath();
   const params = useSearchParams();
+  const requested = params.get("next");
   const viewer = useViewer();
   const [values, setValues] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -105,17 +113,20 @@ export function LoginForm() {
     }
     setErrors({});
     setPending(true);
-    const { error } = await createClient().auth.signInWithPassword(parsed.data);
+    const supabase = createClient();
+    const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
     if (error) {
       setPending(false);
       return setFormError(authErrorMessage(error));
     }
     toast.success("Welcome back");
-    router.replace(next);
+    const target = postSignInPath(requested, null);
+    // Only the generic dashboard depends on the role; a specific page needs no lookup.
+    router.replace(target === "/account" ? postSignInPath(requested, await roleOf(supabase, data.user.id)) : target);
     router.refresh();
   };
 
-  if (viewer && !pending) return <SignedInNotice name={viewer.name} next={next} />;
+  if (viewer && !pending) return <SignedInNotice name={viewer.name} next={postSignInPath(requested, viewer.role)} />;
 
   return (
     <>

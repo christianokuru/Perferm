@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
-import { BagIcon, HeartIcon, MenuIcon, SearchIcon, UserIcon } from "@/components/icons";
+import { BagIcon, HeartIcon, MenuIcon, SearchIcon } from "@/components/icons";
 import { CountBadge, IconButton } from "@/components/ui/icon-button";
 import { mainNav } from "@/lib/config/site";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ import { useHydrated } from "@/stores/storage";
 import { useUiStore } from "@/stores/ui-store";
 import { useWishlistStore } from "@/stores/wishlist-store";
 
+import { AccountAvatar } from "./account-avatar";
 import { Logo } from "./logo";
 
 /**
@@ -92,19 +93,13 @@ export function Header() {
           <IconButton label="Search" onClick={() => open("search")} className="hidden lg:inline-flex">
             <SearchIcon />
           </IconButton>
-          <Link
-            href="/account"
-            aria-label="Account"
-            title="Account"
-            className="hidden size-11 items-center justify-center rounded-full text-ink hover:bg-pearl sm:inline-flex"
-          >
-            <UserIcon />
-          </Link>
+          <AccountAvatar />
+          {/* Phones keep two icons per side (44px tap targets); the wishlist lives in the menu there. */}
           <Link
             href="/wishlist"
             aria-label={`Wishlist${wishReady && wishCount ? `, ${wishCount} saved` : ""}`}
             title="Wishlist"
-            className="relative inline-flex size-11 items-center justify-center rounded-full text-ink hover:bg-pearl"
+            className="relative hidden size-11 items-center justify-center rounded-full text-ink hover:bg-pearl sm:inline-flex"
           >
             <HeartIcon />
             {wishReady ? <CountBadge count={wishCount} /> : null}

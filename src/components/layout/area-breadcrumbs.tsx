@@ -34,6 +34,8 @@ const areas = {
       messages: "Messages",
       delivery: "Delivery",
       settings: "Settings",
+      profile: "Your profile",
+      subscribers: "Subscribers",
     },
     dynamic: (parent, segment) => (parent === "products" ? "Edit product" : segment.toUpperCase()),
   },

@@ -2,17 +2,69 @@
 
 import Link from "next/link";
 
-import { ArrowUpRightIcon, CloseIcon, InstagramIcon, TikTokIcon, WhatsAppIcon } from "@/components/icons";
+import { ArrowUpRightIcon, CloseIcon, InstagramIcon, LogoutIcon, TikTokIcon, WhatsAppIcon } from "@/components/icons";
 import { IconButton } from "@/components/ui/icon-button";
 import { Sheet } from "@/components/ui/sheet";
 import { Accent } from "@/components/ui/typography";
 import { mainNav, siteConfig } from "@/lib/config/site";
+import { useSignOut } from "@/components/auth/use-sign-out";
+import { ButtonLink } from "@/components/ui/button";
+import { homePath } from "@/lib/auth/redirect";
+import { useSessionStore } from "@/stores/session-store";
+import { useHydrated } from "@/stores/storage";
 import { useUiStore } from "@/stores/ui-store";
+import { useWishlistStore } from "@/stores/wishlist-store";
 
+import { Initials } from "./account-avatar";
 import { Logo } from "./logo";
 
+/** Top of the menu: sign in / create account, or who is signed in with their dashboard and sign out. */
+function AccountPanel({ onNavigate }: { onNavigate: () => void }) {
+  const status = useSessionStore((s) => s.status);
+  const user = useSessionStore((s) => s.user);
+  const signOut = useSignOut();
+
+  if (status === "loading") return <div className="mt-6 h-[4.5rem] animate-pulse rounded-[var(--radius-card)] bg-pearl" aria-hidden="true" />;
+
+  if (!user) {
+    return (
+      <div className="mt-6 grid grid-cols-2 gap-2">
+        <ButtonLink href="/login" onClick={onNavigate} variant="primary" block>
+          Sign in
+        </ButtonLink>
+        <ButtonLink href="/register" onClick={onNavigate} variant="outline" block>
+          Create account
+        </ButtonLink>
+      </div>
+    );
+  }
+
+  const isAdmin = user.role === "admin";
+  return (
+    <div className="mt-6 flex items-center gap-3 rounded-[var(--radius-card)] bg-pearl p-3">
+      <Initials name={user.name} email={user.email} className="size-11 text-body-sm" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-body-sm text-ink">{user.name || user.email}</p>
+        <Link href={homePath(user.role)} onClick={onNavigate} className="text-caption text-smoke underline underline-offset-4 hover:text-ink">
+          {isAdmin ? "Admin dashboard" : "My account"}
+        </Link>
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          onNavigate();
+          void signOut();
+        }}
+        className="flex h-11 items-center gap-1.5 rounded-full px-3 text-caption text-smoke hover:bg-white hover:text-ink"
+      >
+        <LogoutIcon size={16} />
+        Sign out
+      </button>
+    </div>
+  );
+}
+
 const secondary = [
-  { label: "Account", href: "/account" },
   { label: "Wishlist", href: "/wishlist" },
   { label: "Our story", href: "/about" },
   { label: "Delivery", href: "/delivery" },
@@ -22,6 +74,8 @@ const secondary = [
 export function MobileMenu() {
   const isOpen = useUiStore((s) => s.panel === "menu");
   const close = useUiStore((s) => s.close);
+  const wishReady = useHydrated(useWishlistStore);
+  const wishCount = useWishlistStore((s) => s.items.length);
 
   return (
     <Sheet open={isOpen} onClose={close} title="Menu" side="full" hideHeader>
@@ -34,7 +88,9 @@ export function MobileMenu() {
           </IconButton>
         </div>
 
-        <nav aria-label="Mobile" className="mt-10">
+        <AccountPanel onNavigate={close} />
+
+        <nav aria-label="Mobile" className="mt-8">
           <ul className="space-y-1">
             {mainNav.map((item, i) => (
               <li key={item.href} className="animate-fade-up" style={{ animationDelay: `${i * 45}ms` }}>
@@ -56,6 +112,7 @@ export function MobileMenu() {
             <li key={item.href}>
               <Link href={item.href} onClick={close} className="text-body-sm text-graphite hover:text-ink">
                 {item.label}
+                {item.href === "/wishlist" && wishReady && wishCount ? <span className="ml-1.5 text-caption text-smoke">({wishCount})</span> : null}
               </Link>
             </li>
           ))}
